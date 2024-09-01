@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "target": "esnext", // Ensure compatibility with the latest ECMAScript features
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -18,9 +19,15 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"] // This allows you to use `@/` as an alias for your root directory
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts", 
+    "**/*.ts", 
+    "**/*.tsx", 
+    ".next/types/**/*.ts",
+    "next.config.js" // Make sure to include any additional files you might be using
+  ],
   "exclude": ["node_modules"]
 }
