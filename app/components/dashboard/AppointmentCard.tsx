@@ -1,10 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from 'react';
-import { FaVideo } from 'react-icons/fa';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, query, where, orderBy, limit, getDocs, updateDoc, doc } from 'firebase/firestore';
+import React, { useEffect, useState } from "react";
+import { FaVideo, FaComments } from "react-icons/fa";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  updateDoc,
+  doc,
+  addDoc,
+} from "firebase/firestore";
 
 interface AppointmentProps {
   username: string;
@@ -12,7 +23,8 @@ interface AppointmentProps {
   date: string;
   time: string;
   videoCall: boolean;
-  sessionId: string; // Add sessionId to easily identify and update the session
+  sessionId: string;
+  patientId: string;
 }
 
 const AppointmentCard: React.FC = () => {
@@ -24,47 +36,50 @@ const AppointmentCard: React.FC = () => {
 
   useEffect(() => {
     const fetchUpcomingAppointment = async (userId: string) => {
-      console.log(`Fetching appointments for doctorId: ${userId}`);
-      
       const q = query(
         collection(db, "sessions"),
         where("doctorId", "==", userId),
         where("isUpcoming", "==", true),
-        where("isCompleted", "==", false), // Ensure we only fetch incomplete sessions
+        where("isCompleted", "==", false),
         orderBy("dateTime", "asc"),
-        limit(1) // Get the closest upcoming appointment
+        limit(1)
       );
 
       try {
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
-          console.log("Found upcoming appointment.");
-          const doc = querySnapshot.docs[0];
-          const data = doc.data();
+          const docSnapshot = querySnapshot.docs[0];
+          const data = docSnapshot.data();
 
-          // Fetch user data based on the userId from the session
+          // Fetch patient data based on the `userId` from the session
           const userQuery = query(
             collection(db, "users"),
             where("userId", "==", data.userId),
-            limit(1) // Since userId is unique, limit to 1
+            limit(1)
           );
-
           const userDocSnapshot = await getDocs(userQuery);
           const userData = userDocSnapshot.docs[0]?.data();
 
           setAppointment({
-            username: userData?.username || "Dr", // Fallback to "Unknown" if no name is found
+            username: userData?.username || "Unknown Patient", // Fetch the patient's username
             type: data.type === "Online" ? "Online" : "In-Person",
-            date: new Date(data.dateTime.toDate()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }),
-            time: new Date(data.dateTime.toDate()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            date: new Date(data.dateTime.toDate()).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+            }),
+            time: new Date(data.dateTime.toDate()).toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            }),
             videoCall: data.type === "Online",
-            sessionId: doc.id, // Store the sessionId for later use
+            sessionId: docSnapshot.id,
+            patientId: data.userId, // `userId` here represents the patient's id
           });
-        } else {
-          console.log("No upcoming appointments found.");
         }
       } catch (error) {
-        console.error("Error fetching appointment: ", error);
+        console.error("Error fetching appointment:", error);
       } finally {
         setLoading(false);
       }
@@ -72,10 +87,8 @@ const AppointmentCard: React.FC = () => {
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log(`User logged in: ${user.uid}`);
-        fetchUpcomingAppointment(user.uid);
+        fetchUpcomingAppointment(user.uid); // Fetch based on current logged-in doctor (userId)
       } else {
-        console.error("No user is currently logged in.");
         setLoading(false);
       }
     });
@@ -84,22 +97,66 @@ const AppointmentCard: React.FC = () => {
   }, [auth, db]);
 
   const handleStartCall = () => {
-    // Mark the session as completed once the video call is finished
     const completeSession = async () => {
       if (appointment) {
         try {
           const sessionRef = doc(db, "sessions", appointment.sessionId);
           await updateDoc(sessionRef, { isCompleted: true, isUpcoming: false });
-          console.log("Session marked as completed.");
         } catch (error) {
-          console.error("Error updating session status: ", error);
+          console.error("Error updating session status:", error);
         }
       }
     };
+    router.push("/agora");
+    setTimeout(completeSession, 5000); // Delay completion by 5 seconds for the call
+  };
 
-    // Simulate video call navigation and mark as complete after some time
-    router.push('/agora'); // Navigate to the video call page
-    setTimeout(completeSession, 5000); // Mark the session as complete after 5 seconds
+  const handleStartChat = async () => {
+    if (!appointment) return;
+
+    const chatRef = collection(db, "chats");
+    const q = query(
+      chatRef,
+      where("doctorId", "==", auth.currentUser?.uid),
+      where("patientId", "==", appointment.patientId),
+      limit(1)
+    );
+
+    try {
+      const querySnapshot = await getDocs(q);
+      let chatId: string;
+
+      if (!querySnapshot.empty) {
+        // Chat already exists
+        chatId = querySnapshot.docs[0].id;
+      } else {
+        // Create a new chat if it doesn't exist
+        const newChatRef = await addDoc(collection(db, "chats"), {
+          doctorId: auth.currentUser?.uid,
+          patientId: appointment.patientId,
+          createdAt: new Date(),
+          lastMessage: "", // Initialize empty message
+          unreadMessages: 0,
+        });
+        chatId = newChatRef.id;
+      }
+
+      // Navigate to the chat page with the chatId
+      router.push(`/message/${chatId}`);
+    } catch (error) {
+      console.error("Error starting chat:", error);
+    }
+  };
+
+  const handleCompleteInPersonSession = async () => {
+    if (appointment) {
+      try {
+        const sessionRef = doc(db, "sessions", appointment.sessionId);
+        await updateDoc(sessionRef, { isCompleted: true, isUpcoming: false });
+      } catch (error) {
+        console.error("Error marking in-person session as complete:", error);
+      }
+    }
   };
 
   if (loading) {
@@ -126,14 +183,24 @@ const AppointmentCard: React.FC = () => {
         <p className="text-gray-600 mb-2">Patient: {appointment.username}</p>
         <p className="text-gray-600">Location: {appointment.type}</p>
       </div>
-      <div className="flex items-center justify-between mt-4">
+      <div className="flex items-center justify-between mt-4 space-x-4">
         <span className="text-gray-600">{appointment.date}, {appointment.time}</span>
-        {appointment.videoCall && (
-          <button onClick={handleStartCall} className="bg-green-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
-            <FaVideo />
-            <span>Video Call</span>
+        <div className="flex space-x-4">
+          {appointment.videoCall ? (
+            <button onClick={handleStartCall} className="bg-green-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
+              <FaVideo />
+              <span>Video Call</span>
+            </button>
+          ) : (
+            <button onClick={handleCompleteInPersonSession} className="bg-yellow-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
+              <span>Complete In-Person</span>
+            </button>
+          )}
+          <button onClick={handleStartChat} className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
+            <FaComments />
+            <span>Chat</span>
           </button>
-        )}
+        </div>
       </div>
     </div>
   );

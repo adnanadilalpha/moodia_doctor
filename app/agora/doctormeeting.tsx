@@ -17,9 +17,10 @@ import {
 } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 
-const APP_ID = "e7f6e9aeecf14b2ba10e3f40be9f56e7"; // Replace with your Agora App ID
-const TOKEN = "007eJxTYPi7dNlRr9m1p/6mBDz3CmK2Ee79xrqA+X9u7OpjRxZWTp6kwJBilpRklGZgkZZoaG6SbGxsaWZhbmhoYWJqZG6ZlpxqJtt/Oa0hkJGh8OcLBkYoBPFZGEpSi0sYGADZICF8"; // Replace with your Agora Token
+const APP_ID = "d6bb2f08fa174c33968711845279fce6"; // Replace with your Agora App ID
+const TOKEN = "007eJxTYKhydWyPvdoZEBCbGu825/Xi7kV7d9ufn/dsztqDNf87JNkVGFLMkpKM0gws0hINzU2SjY0tzSzMDQ0tTEyNzC3TklPNdnjeTWsIZGSw2MbBxMgAgSA+C0NJanEJAwMAlxUgMQ=="; // Replace with your Agora Token
 const CHANNEL = "test"; // Replace with your channel name
+const HOST_UID = "UID"; // Use a unique identifier for the host (perhaps Firebase auth UID)
 
 type RemoteTracks = {
   videoTrack: IRemoteVideoTrack | null;
@@ -34,6 +35,7 @@ const DoctorMeeting: React.FC = () => {
   const [remoteTracks, setRemoteTracks] = useState<{ [uid: string]: RemoteTracks }>({});
   const [micOn, setMicOn] = useState<boolean>(true);
   const [camOn, setCamOn] = useState<boolean>(true);
+  const [isHost, setIsHost] = useState<boolean>(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -50,6 +52,10 @@ const DoctorMeeting: React.FC = () => {
 
   const startCall = async (agoraClient: IAgoraRTCClient) => {
     try {
+      // Check if current user is the host
+      const userId = "UID"; // Fetch from auth or context
+      setIsHost(userId === HOST_UID);
+
       // Ensure media permissions are granted
       await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 
@@ -70,9 +76,6 @@ const DoctorMeeting: React.FC = () => {
 
       // Handle remote user publishing their stream
       agoraClient.on("user-published", async (user, mediaType) => {
-        // Ignore local user's tracks
-        if (user.uid === agoraClient.uid) return;
-
         await agoraClient.subscribe(user, mediaType);
 
         setRemoteTracks((prev) => {
@@ -83,6 +86,8 @@ const DoctorMeeting: React.FC = () => {
               videoTrack: user.videoTrack ?? null,
               audioTrack: newState[user.uid]?.audioTrack ?? null,
             };
+            // Play the remote video
+            if (user.videoTrack) user.videoTrack.play(`remote-video-${user.uid}`);
           }
 
           if (mediaType === "audio") {
@@ -90,20 +95,12 @@ const DoctorMeeting: React.FC = () => {
               videoTrack: newState[user.uid]?.videoTrack ?? null,
               audioTrack: user.audioTrack ?? null,
             };
+            // Play the remote audio
+            if (user.audioTrack) user.audioTrack.play();
           }
 
           return newState;
         });
-
-        // Play remote video
-        if (mediaType === "video" && user.videoTrack) {
-          user.videoTrack.play(`remote-video-${user.uid}`);
-        }
-
-        // Play remote audio
-        if (mediaType === "audio" && user.audioTrack) {
-          user.audioTrack.play();
-        }
       });
 
       // Handle user unpublishing their stream
@@ -112,17 +109,11 @@ const DoctorMeeting: React.FC = () => {
           const newState = { ...prev };
 
           if (mediaType === "video") {
-            newState[user.uid] = {
-              ...newState[user.uid],
-              videoTrack: null,
-            };
+            newState[user.uid] = { ...newState[user.uid], videoTrack: null };
           }
 
           if (mediaType === "audio") {
-            newState[user.uid] = {
-              ...newState[user.uid],
-              audioTrack: null,
-            };
+            newState[user.uid] = { ...newState[user.uid], audioTrack: null };
           }
 
           return newState;
@@ -174,7 +165,18 @@ const DoctorMeeting: React.FC = () => {
       console.error("Failed to leave call and close media tracks:", error);
     }
 
-    router.back(); // Navigate back to the previous page
+    // Navigate back to previous page or end the call
+    router.back();
+  };
+
+  const handleEndMeeting = async () => {
+    // Forcefully end the call for everyone if the user is the host
+    if (isHost && client) {
+      await client.leave();
+      console.log("Host has ended the call.");
+      // Navigate back to previous page or perform necessary actions
+      router.back();
+    }
   };
 
   return (
@@ -227,12 +229,21 @@ const DoctorMeeting: React.FC = () => {
         >
           {camOn ? <FaVideo className="text-xl" /> : <FaVideoSlash className="text-xl" />}
         </button>
-        <button
-          onClick={leaveCall}
-          className="p-2 rounded-full bg-red-500 text-white"
-        >
-          <FaPhoneSlash className="text-xl" />
-        </button>
+        {isHost ? (
+          <button
+            onClick={handleEndMeeting}
+            className="p-2 rounded-full bg-red-500 text-white"
+          >
+            <FaPhoneSlash className="text-xl" />
+          </button>
+        ) : (
+          <button
+            onClick={leaveCall}
+            className="p-2 rounded-full bg-red-500 text-white"
+          >
+            <FaPhoneSlash className="text-xl" />
+          </button>
+        )}
       </div>
     </div>
   );

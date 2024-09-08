@@ -158,7 +158,7 @@ const SignupPage = () => {
           <p className="text-blue-700 mb-8">
             Dedicated virtual-consultation platform for doctors and patients to help them consult across various channels.
           </p>
-          <img src="/images/doctors.png" alt="Doctors" className="w-full h-auto max-h-96 object-contain" /> 
+          <img src="/images/doctor-log.png" alt="Doctors" className="w-full h-full  object-contain" /> 
         </div>
       </div>
     </div>

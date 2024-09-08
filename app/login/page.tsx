@@ -128,7 +128,7 @@ const LoginPage = () => {
             Dedicated virtual consultation platform for doctors and patients to help them consult across various channels.
           </p>
           <div className="flex justify-center">
-            <img src="/images/doctors.png" alt="Doctors" className="max-w-xs" />
+            <img src="/images/doctor-log.png" alt="Doctors" className="w-full h-full" />
           </div>
         </div>
       </div>

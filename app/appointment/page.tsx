@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import React, { useEffect, useState } from 'react';
 import { getAuth } from 'firebase/auth';
@@ -17,8 +17,7 @@ interface Appointment {
 }
 
 const Appointments: React.FC = () => {
-  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
-  const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
   const auth = getAuth();
@@ -30,40 +29,16 @@ const Appointments: React.FC = () => {
       if (!user) return;
 
       try {
-        const upcomingQuery = query(
+        const appointmentsQuery = query(
           collection(firestore, 'sessions'),
           where('doctorId', '==', user.uid),
-          where('isUpcoming', '==', true),
           orderBy('dateTime', 'asc')
         );
 
-        const pastQuery = query(
-          collection(firestore, 'sessions'),
-          where('doctorId', '==', user.uid),
-          where('isUpcoming', '==', false),
-          orderBy('dateTime', 'desc')
-        );
+        const appointmentsSnapshot = await getDocs(appointmentsQuery);
 
-        const upcomingSnapshot = await getDocs(upcomingQuery);
-        const pastSnapshot = await getDocs(pastQuery);
-
-        setUpcomingAppointments(
-          upcomingSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              name: data.name || "Unknown",  // Handle missing or empty names
-              specialization: data.specialization || "N/A",
-              dateTime: data.dateTime,
-              type: data.type || "Unknown",
-              isUpcoming: data.isUpcoming,
-              isCompleted: data.isCompleted,
-            };
-          }) as Appointment[]
-        );
-
-        setPastAppointments(
-          pastSnapshot.docs.map(doc => {
+        setAppointments(
+          appointmentsSnapshot.docs.map(doc => {
             const data = doc.data();
             return {
               id: doc.id,
@@ -86,9 +61,12 @@ const Appointments: React.FC = () => {
     fetchAppointments();
   }, [auth, firestore]);
 
+  const upcomingAppointments = appointments.filter(appointment => appointment.isUpcoming);
+  const pastAppointments = appointments.filter(appointment => !appointment.isUpcoming);
+
   return (
     <div className='flex'>
-      <Sidebar />
+      <Sidebar patientId='' />
       <div className="flex-grow flex flex-col">
         <Navbar />
         <div className='p-8'>

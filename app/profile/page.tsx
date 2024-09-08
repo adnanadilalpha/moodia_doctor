@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import React, { useState, useEffect } from 'react';
 import { getAuth } from 'firebase/auth';
@@ -9,11 +9,11 @@ import Sidebar from '../components/sidebar';
 import Navbar from '../components/navbar';
 
 interface Doctor {
-  name: string;
+  fullName: string;
   email: string;
-  qualification: string;
+  specialization: string;
   bio: string;
-  photoURL?: string;
+  photoURL?: string | undefined; // Allow undefined but not null
 }
 
 const Profile: React.FC = () => {
@@ -21,11 +21,12 @@ const Profile: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState<Doctor>({
-    name: '',
+    fullName: '',
     email: '',
-    qualification: '',
+    specialization: '',
     bio: '',
   });
+  const [photoURL, setPhotoURL] = useState<string | undefined>(undefined); // Only string or undefined
 
   const auth = getAuth();
   const firestore = getFirestore();
@@ -42,21 +43,18 @@ const Profile: React.FC = () => {
           if (doctorDoc.exists()) {
             const doctorData = doctorDoc.data() as Doctor;
             setDoctor(doctorData);
+
             setFormData({
-              name: doctorData.name || user.displayName || '',
+              fullName: doctorData.fullName || user.displayName || '',
               email: doctorData.email || user.email!,
-              qualification: doctorData.qualification || '',
+              specialization: doctorData.specialization || '',
               bio: doctorData.bio || '',
             });
-          } else {
-            // If the user is new, use Firebase Auth data to prefill the form
-            setFormData({
-              name: user.displayName || '',
-              email: user.email || '',
-              qualification: '',
-              bio: '',
-            });
-            setEditing(true); // Automatically enter editing mode for new users
+
+            // Set photoURL only if it exists
+            if (doctorData.photoURL) {
+              setPhotoURL(doctorData.photoURL);
+            }
           }
         }
       } catch (error) {
@@ -77,7 +75,7 @@ const Profile: React.FC = () => {
     try {
       const doctorRef = doc(firestore, 'doctors', user.uid);
       await setDoc(doctorRef, formData, { merge: true });
-      setDoctor({ ...formData, photoURL: doctor?.photoURL });
+      setDoctor({ ...formData, photoURL });
       setEditing(false);
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -89,12 +87,11 @@ const Profile: React.FC = () => {
     if (!file) return;
 
     try {
-      // Compress the image before uploading
       const compressedFile = await imageCompression(file, {
-        maxSizeMB: 1, // Maximum file size in MB
-        maxWidthOrHeight: 800, // Maximum width or height
-        useWebWorker: true, // Use web worker for off-main-thread processing
-        fileType: 'image/webp' // Convert to webp format
+        maxSizeMB: 1, 
+        maxWidthOrHeight: 800, 
+        useWebWorker: true, 
+        fileType: 'image/webp' 
       });
 
       const user = auth.currentUser;
@@ -103,8 +100,9 @@ const Profile: React.FC = () => {
       const storageRef = ref(storage, `doctors/${user.uid}/profile.webp`);
       await uploadBytes(storageRef, compressedFile);
       const downloadURL = await getDownloadURL(storageRef);
+
       await updateDoc(doc(firestore, 'doctors', user.uid), { photoURL: downloadURL });
-      setDoctor((prev) => prev ? { ...prev, photoURL: downloadURL } : prev);
+      setPhotoURL(downloadURL);
     } catch (error) {
       console.error('Error uploading profile image:', error);
     }
@@ -130,7 +128,7 @@ const Profile: React.FC = () => {
             <div className="flex items-center mb-6">
               <div className="w-32 h-32">
                 <img
-                  src={doctor?.photoURL || `https://via.placeholder.com/128?text=${doctor?.name?.charAt(0) || formData.name.charAt(0)}`}
+                  src={photoURL || `https://via.placeholder.com/128?text=${formData.fullName.charAt(0) || 'D'}`}
                   alt="Profile"
                   className="w-full h-full rounded-full object-cover"
                 />
@@ -150,11 +148,11 @@ const Profile: React.FC = () => {
             </div>
             <form onSubmit={handleFormSubmit}>
               <div className="mb-4">
-                <label className="block text-gray-700">Name</label>
+                <label className="block text-gray-700">Full Name</label>
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
+                  name="fullName"
+                  value={formData.fullName}
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-md"
                   disabled={!editing}
@@ -172,11 +170,11 @@ const Profile: React.FC = () => {
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-gray-700">Qualification</label>
+                <label className="block text-gray-700">Specialization</label>
                 <input
                   type="text"
-                  name="qualification"
-                  value={formData.qualification}
+                  name="specialization"
+                  value={formData.specialization}
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-md"
                   disabled={!editing}
