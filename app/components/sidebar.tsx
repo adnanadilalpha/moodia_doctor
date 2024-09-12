@@ -4,17 +4,15 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { FaCalendarAlt, FaUserMd, FaCog, FaSignOutAlt } from 'react-icons/fa';
 import { FaMessage } from 'react-icons/fa6';
-import MessagePage from '../message/[patientId]/page';
 
 interface SidebarProps {
   patientId?: string; // Make patientId optional
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ patientId }) => {
+const Sidebar: React.FC<SidebarProps> = () => {
   const pathname = usePathname();
 
   // Generate the dynamic message URL including patientId
-  const messageUrl = '/message';
 
   return (
     <aside className="bg-green-50 w-[20%] h-screen md:flex flex-col items-center p-28 hidden">
@@ -33,7 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ patientId }) => {
         </Link>
 
         {/* Correct dynamic route to include patientId */}
-        <Link href={messageUrl}>
+        <Link href="/chat">
           <div
             className={`flex items-center space-x-6 p-4 rounded-lg ${
               pathname.includes('/message')

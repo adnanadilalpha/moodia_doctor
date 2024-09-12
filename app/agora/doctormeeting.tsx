@@ -18,7 +18,7 @@ import {
 import { useRouter } from "next/navigation";
 
 const APP_ID = "d6bb2f08fa174c33968711845279fce6"; // Replace with your Agora App ID
-const TOKEN = "007eJxTYKhydWyPvdoZEBCbGu825/Xi7kV7d9ufn/dsztqDNf87JNkVGFLMkpKM0gws0hINzU2SjY0tzSzMDQ0tTEyNzC3TklPNdnjeTWsIZGSw2MbBxMgAgSA+C0NJanEJAwMAlxUgMQ=="; // Replace with your Agora Token
+const TOKEN = "007eJxTYLjxNufTLWHGR2f9zrXLpy15uz/19/1cOxFhfW1m3cUWBd4KDClmSUlGaQYWaYmG5ibJxsaWZhbmhoYWJqZG5pZpyalmdyoepzUEMjLkr61jZmSAQBCfhaEktbiEgQEAckQfwQ=="; // Replace with your Agora Token
 const CHANNEL = "test"; // Replace with your channel name
 const HOST_UID = "UID"; // Use a unique identifier for the host (perhaps Firebase auth UID)
 

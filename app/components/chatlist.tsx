@@ -31,15 +31,22 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
       const userDoc = await getDoc(doc(firestore, "users", patientId));
       if (userDoc.exists()) {
         const userData = userDoc.data();
+        
+        // Check if 'username', 'displayName', or fallback to "No Name"
+        const name = userData?.username || userData?.displayName || "No Name";
+
+        // Use 'photoURL' for profilePicture or fallback to a placeholder
+        const profilePicture = userData?.photoURL || "";
+
         return {
-          name: userData?.displayName || "No Name", // Use 'displayName' from Firestore, or default to "No Name"
-          profilePicture: userData?.photoURL || "/default-avatar.png", // Use 'photoURL', or a placeholder
+          name,
+          profilePicture,
         };
       } else {
         // Return default values if user data does not exist
         return {
           name: "No Name",
-          profilePicture: "/default-avatar.png",
+          profilePicture: "",
         };
       }
     } catch (error) {
@@ -47,7 +54,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
       // Return default values in case of an error
       return {
         name: "No Name",
-        profilePicture: "/default-avatar.png",
+        profilePicture: "",
       };
     }
   };
