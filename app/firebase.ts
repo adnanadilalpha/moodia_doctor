@@ -1,9 +1,10 @@
-// For Firebase v9 and later, use the new modular SDK
-import { initializeApp } from 'firebase/app';
+// lib/firebase.js
+import { initializeApp, getApps, getApp } from 'firebase/app'; // Add getApps and getApp to handle multiple instances
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage'; // Import Firebase Storage
+import { getStorage } from 'firebase/storage';
 
+// Use environment variables for Firebase config
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -13,9 +14,12 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+// Ensure Firebase is only initialized once
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// Initialize Firebase services
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app); // Initialize Firebase Storage
+const storage = getStorage(app);
 
-export { auth, db, storage }; // Export the storage object along with auth and db
+export { auth, db, storage };
