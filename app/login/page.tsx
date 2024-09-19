@@ -6,7 +6,6 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
-  sendEmailVerification,
   onAuthStateChanged,
 } from 'firebase/auth';
 import { auth, db } from '../firebase';
@@ -73,10 +72,10 @@ const LoginPage = () => {
         throw new Error('No doctor account found with this email.');
       }
 
+      // Check email verification status
       if (!user.emailVerified) {
         setIsVerificationSent(true);
         setErrorMessage('Please verify your email before logging in.');
-        await sendEmailVerification(user);
       } else {
         router.push('/home');
       }
@@ -102,10 +101,10 @@ const LoginPage = () => {
         throw new Error('No doctor account found with this email.');
       }
 
+      // Check email verification status
       if (!user.emailVerified) {
         setIsVerificationSent(true);
         setErrorMessage('Please verify your email before logging in.');
-        await sendEmailVerification(user);
       } else {
         router.push('/home');
       }

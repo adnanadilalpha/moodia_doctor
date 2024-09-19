@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";  // Correct import
+import { useRouter } from "next/navigation";
 import Sidebar from "../components/sidebar";
 import Navbar from "../components/navbar";
 import Footer from "../components/footer";
@@ -14,7 +14,7 @@ import { doc, getDoc } from "firebase/firestore";
 
 const HomePage = () => {
   const [userName, setUserName] = useState<string>('Dr. Unknown');
-  const router = useRouter();  // Initialize the router
+  const router = useRouter(); 
 
   useEffect(() => {
     const fetchUserName = async () => {
@@ -55,7 +55,6 @@ const HomePage = () => {
 
   const [dailyProgress] = useState(80);
 
-
   return (
     <div className="flex min-h-screen bg-gray-100">
       <Sidebar />
@@ -75,7 +74,7 @@ const HomePage = () => {
 
             <div className="lg:col-span-1 space-y-8">
               <PatientActivityCard activities={patientActivities} />
-              <ProgressCard progress={dailyProgress} />
+              <ProgressCard />
             </div>
           </div>
         </main>

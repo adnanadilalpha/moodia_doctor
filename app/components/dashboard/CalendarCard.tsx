@@ -1,56 +1,84 @@
-import React, { useState } from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { auth, db } from '@/app/firebase'; // Adjust the path to your Firebase configuration
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { EventInput } from '@fullcalendar/core';
+import { EventClickArg, EventInput, EventApi } from '@fullcalendar/core';
 
-type Appointment = {
-  title: string;
-  start: Date;
-  end?: Date;
-  extendedProps: {
-    mode: 'Online' | 'In-person';
-    time: string;
-    paymentStatus: 'Paid' | 'Not Paid';
-  };
+type Session = {
+  dateTime: Timestamp;
+  doctorId: string;
+  isCompleted: boolean;
+  isUpcoming: boolean;
+  name: string;
+  sessionId: string;
+  specialization: string;
+  type: string;
+  userId: string;
 };
 
-const initialAppointments: EventInput[] = [
-  {
-    title: 'John Doe - Online',
-    start: new Date(2024, 8, 24, 10, 0), // Month is 0-indexed (August is 8)
-    extendedProps: {
-      mode: 'Online',
-      time: '10:00 AM',
-      paymentStatus: 'Paid',
-    },
-  },
-  {
-    title: 'Jane Smith - In-person',
-    start: new Date(2024, 8, 24, 13, 0),
-    extendedProps: {
-      mode: 'In-person',
-      time: '1:00 PM',
-      paymentStatus: 'Not Paid',
-    },
-  },
-  {
-    title: 'Alice Johnson - Online',
-    start: new Date(2024, 8, 25, 11, 30),
-    extendedProps: {
-      mode: 'Online',
-      time: '11:30 AM',
-      paymentStatus: 'Paid',
-    },
-  },
-];
-
 const CalendarCard: React.FC = () => {
-  const [currentEvents] = useState<EventInput[]>(initialAppointments);
+  const [currentEvents, setCurrentEvents] = useState<EventInput[]>([]);
   const [modalIsOpen, setModalIsOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<EventInput | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EventApi | null>(null);
+  const [doctorId, setDoctorId] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true); // For loading state
 
-  const handleEventClick = (clickInfo: any) => {
+  const [error, setError] = useState<string>(''); // For error handling
+
+  // Get current doctorId
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setDoctorId(user.uid);
+      } else {
+        // Redirect to login if not authenticated
+        // router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch sessions when doctorId changes
+  useEffect(() => {
+    if (doctorId) {
+      // Fetch sessions
+      const fetchSessions = async () => {
+        try {
+          const sessionsRef = collection(db, 'sessions');
+          const q = query(sessionsRef, where('doctorId', '==', doctorId));
+          const querySnapshot = await getDocs(q);
+          const events: EventInput[] = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data() as Session;
+            // Map the session data to EventInput
+            const event: EventInput = {
+              id: data.sessionId,
+              title: `${data.name} - ${data.type}`,
+              start: data.dateTime.toDate(), // Convert Timestamp to Date
+              extendedProps: {
+                ...data, // Include all data for easy access in modal
+              },
+            };
+            events.push(event);
+          });
+          setCurrentEvents(events);
+        } catch (error) {
+          console.error('Error fetching sessions:', error);
+          setError('Failed to load appointments. Please try again later.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchSessions();
+    }
+  }, [doctorId]);
+
+  const handleEventClick = (clickInfo: EventClickArg) => {
     setSelectedEvent(clickInfo.event);
     setModalIsOpen(true);
   };
@@ -59,6 +87,8 @@ const CalendarCard: React.FC = () => {
     setModalIsOpen(false);
     setSelectedEvent(null);
   };
+
+  
 
   const renderEventContent = (eventInfo: any) => {
     return (
@@ -69,26 +99,25 @@ const CalendarCard: React.FC = () => {
     );
   };
 
-  const formatDate = (date: any) => {
-    if (typeof date === 'number') {
-      date = new Date(date);
-    } else if (typeof date === 'string') {
-      date = new Date(date);
-    }
-    return date instanceof Date && !isNaN(date.getTime()) ? date.toLocaleDateString() : '';
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
   };
 
   return (
-    <div className="bg-white p-2 sm:p-4 md:p-6 rounded-lg shadow-md lg:col-span-3">
-      <h2 className="text-md sm:text-lg md:text-xl font-semibold text-gray-700 mb-2 sm:mb-4">List of Appointments</h2>
-      <div className="bg-gray-50 rounded-lg p-2 sm:p-4">
-        <div className="w-full text-xs sm:text-sm">
+    <div className="bg-white p-4 md:p-6 rounded-lg shadow-md">
+      <h2 className="text-xl font-semibold text-gray-700 mb-4">Your Appointments</h2>
+      <div className="bg-gray-50 rounded-lg p-4">
+        {loading ? (
+          <p>Loading appointments...</p>
+        ) : error ? (
+          <p className="text-red-500">{error}</p>
+        ) : (
           <FullCalendar
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
             events={currentEvents}
-            eventClick={handleEventClick} // Handle clicking on an event
-            eventContent={renderEventContent} // Custom rendering for events
+            eventClick={handleEventClick}
+            eventContent={renderEventContent}
             height="auto"
             eventDisplay="block"
             headerToolbar={{
@@ -97,31 +126,31 @@ const CalendarCard: React.FC = () => {
               right: 'dayGridMonth',
             }}
             contentHeight="auto"
-            aspectRatio={1.5} // More square aspect ratio for better fit on mobile
+            aspectRatio={1.5}
           />
-        </div>
+        )}
       </div>
 
       {/* Modal for displaying appointment details */}
       {modalIsOpen && selectedEvent && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4 sm:p-6 lg:p-8">
-          <div className="bg-white p-4 sm:p-6 lg:p-8 rounded-lg shadow-lg max-w-xs sm:max-w-lg lg:max-w-xl mx-auto">
-            <h2 className="text-md sm:text-lg md:text-2xl font-bold mb-4">{selectedEvent.title}</h2>
-            <p className="text-xs sm:text-sm md:text-base">
-              <strong>Date:</strong> {formatDate(selectedEvent.start)}
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg mx-auto">
+            <h2 className="text-2xl font-bold mb-4">{selectedEvent.extendedProps?.name}</h2>
+            <p className="text-base mb-2">
+              <strong>Date and Time:</strong>{' '}
+              {formatDateTime(selectedEvent.start as Date)}
             </p>
-            <p className="text-xs sm:text-sm md:text-base">
-              <strong>Time:</strong> {selectedEvent.extendedProps?.time}
+            <p className="text-base mb-2">
+              <strong>Session Type:</strong> {selectedEvent.extendedProps?.type}
             </p>
-            <p className="text-xs sm:text-sm md:text-base">
-              <strong>Mode:</strong> {selectedEvent.extendedProps?.mode}
+            <p className="text-base mb-2">
+              <strong>Specialization:</strong>{' '}
+              {selectedEvent.extendedProps?.specialization}
             </p>
-            <p className="text-xs sm:text-sm md:text-base">
-              <strong>Payment Status:</strong> {selectedEvent.extendedProps?.paymentStatus}
-            </p>
+
             <button
               onClick={closeModal}
-              className="mt-4 px-4 py-2 bg-black text-white rounded hover:bg-green-500 w-full text-sm sm:text-base"
+              className="mt-6 px-4 py-2 bg-primary text-black rounded hover:bg-primary-dark w-full"
             >
               Close
             </button>

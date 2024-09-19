@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getFirestore, collection, query, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
+import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
 
 interface UserProfile {
   name: string;
@@ -22,8 +22,8 @@ interface ChatListProps {
 
 const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
   const [chats, setChats] = useState<Chat[]>([]);
-  const firestore = getFirestore();
   const [loadingChats, setLoadingChats] = useState(true);
+  const firestore = getFirestore();
 
   // Function to fetch user profile from 'users' collection using patientId
   const fetchPatientProfile = async (patientId: string): Promise<UserProfile> => {
@@ -51,7 +51,6 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
       }
     } catch (error) {
       console.error(`Error fetching patient profile from users collection:`, error);
-      // Return default values in case of an error
       return {
         name: "No Name",
         profilePicture: "",
@@ -62,7 +61,8 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
   useEffect(() => {
     if (!currentUser) return;
 
-    const q = query(collection(firestore, "chats"));
+    // Fetch only the chats where doctorId matches the current user's ID
+    const q = query(collection(firestore, "chats"), where("doctorId", "==", currentUser.uid));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const chatList: Chat[] = [];
@@ -107,18 +107,22 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
   };
 
   if (loadingChats) {
-    return <div>Loading chats...</div>;
+    return (
+      <div className="flex justify-center items-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-4">
-      <h2 className="text-xl font-semibold">Conversations</h2>
-      <div className="mt-4">
+    <div className="p-4 bg-white rounded-lg shadow-md">
+      <h2 className="text-xl font-semibold text-gray-700">Conversations</h2>
+      <div className="mt-4 space-y-4">
         {chats.length > 0 ? (
           chats.map((chat) => (
             <div
               key={chat.id}
-              className="p-2 border-b cursor-pointer flex justify-between"
+              className="p-4 border-b cursor-pointer flex justify-between items-center hover:bg-gray-50 rounded-lg transition"
               onClick={() => handleChatSelect(chat)} // Pass the selected chat and handle unread messages
             >
               <div className="flex items-center">
@@ -126,27 +130,29 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
                   <img
                     src={chat.patientProfile.profilePicture}
                     alt="Profile"
-                    className="w-8 h-8 rounded-full mr-3"
+                    className="w-10 h-10 rounded-full mr-4 object-cover"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-full mr-3 bg-gray-300 flex items-center justify-center">
-                    <span className="text-lg text-white">
+                  <div className="w-10 h-10 rounded-full mr-4 bg-gray-300 flex items-center justify-center">
+                    <span className="text-lg font-semibold text-white">
                       {chat.patientProfile?.name.charAt(0).toUpperCase() || "N"}
                     </span>
                   </div>
                 )}
                 <div>
-                  <p className="font-semibold">{chat.patientProfile?.name || "No Name"}</p>
-                  <p className="text-sm text-gray-500">{chat.lastMessage}</p>
+                  <p className="font-bold text-gray-800">{chat.patientProfile?.name || "No Name"}</p>
+                  <p className="text-sm text-gray-500 truncate w-40">{chat.lastMessage}</p>
                 </div>
               </div>
               {chat.unreadMessages > 0 && (
-                <span className="text-red-500 text-xs font-bold">{chat.unreadMessages} new</span>
+                <span className="text-white bg-red-500 px-2 py-1 rounded-full text-xs font-bold">
+                  {chat.unreadMessages} new
+                </span>
               )}
             </div>
           ))
         ) : (
-          <p>No conversations found</p>
+          <p className="text-center text-gray-500">No conversations found</p>
         )}
       </div>
     </div>

@@ -1,8 +1,8 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { FaCalendarAlt, FaUserMd, FaCog, FaSignOutAlt } from 'react-icons/fa';
-import { FaMessage } from 'react-icons/fa6';
+import { FaCalendarAlt, FaUserMd, FaCog, FaSignOutAlt, FaMoneyBill } from 'react-icons/fa';
+import { FaMessage, FaMoneyBill1, FaMoneyBill1Wave, FaMoneyBillTrendUp, FaMoneyCheckDollar } from 'react-icons/fa6';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase'; // Adjust the path as needed
 import Link from 'next/link';
@@ -41,11 +41,24 @@ const Sidebar: React.FC<SidebarProps> = () => {
           </div>
         </Link>
 
+        <Link href="/billing">
+          <div
+            className={`flex items-center space-x-6 p-4 rounded-lg ${
+              pathname === '/billing'
+                ? 'bg-yellow-400 text-black'
+                : 'text-black hover:bg-green-500 hover:text-white'
+            }`}
+          >
+            <FaMoneyBillTrendUp className="w-8 h-6" />
+            <span>Earnings & Billing</span>
+          </div>
+        </Link>
+
         {/* Messages Link */}
         <Link href="/chat">
           <div
             className={`flex items-center space-x-6 p-4 rounded-lg ${
-              pathname.includes('/message')
+              pathname.includes('/chat')
                 ? 'bg-yellow-400 text-black'
                 : 'text-black hover:bg-green-500 hover:text-white'
             }`}
