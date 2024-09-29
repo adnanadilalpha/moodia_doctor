@@ -26,7 +26,7 @@ const Sidebar: React.FC<SidebarProps> = () => {
   };
 
   return (
-    <aside className="bg-green-50 w-[20%] h-screen md:flex flex-col items-center p-28 hidden">
+    <aside className="bg-[#8AFFB5] w-[20%] h-screen md:flex flex-col items-center p-12 hidden my-8 ml-8 rounded-lg">
       <nav className="flex flex-col space-y-8">
         <Link href="/home">
           <div

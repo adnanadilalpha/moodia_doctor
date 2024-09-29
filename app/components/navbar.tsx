@@ -62,7 +62,7 @@ const Navbar = () => {
 
   return (
     <nav className="bg-white shadow-lg">
-      <div className="container mx-auto px-4">
+      <div className="px-4 md:px-12">
         <div className=" flex justify-between items-center py-4">
           {/* Logo and profile section */}
           <div className="w-full flex justify-between items-center">
@@ -81,7 +81,7 @@ const Navbar = () => {
                 <img
                   src={profilePicture}
                   alt="Profile"
-                  className="w-12 h-12 rounded-full object-cover"
+                  className="w-6 h-6 rounded-full object-cover"
                 />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-gray-500 flex items-center justify-center text-white text-lg">

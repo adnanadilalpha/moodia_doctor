@@ -221,14 +221,15 @@ const MessagePage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {currentUser ? (
+    <div className="flex flex-col h-screen bg-gray-100">
+ <Navbar />
+      <div className="flex flex-grow">
+       
+        {currentUser ? (
         <Sidebar patientId={userType === 'doctor' ? currentUser.uid : selectedChat?.doctorId} />
       ) : (
         <div>No user found</div>
       )}
-      <div className="flex flex-col flex-grow">
-        <Navbar />
         <div className="flex-grow flex">
           <div className="w-1/4 border-r bg-white">
             <ChatList currentUser={currentUser} onSelectChat={setSelectedChat} />

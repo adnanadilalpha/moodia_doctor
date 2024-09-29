@@ -56,10 +56,10 @@ const HomePage = () => {
   const [dailyProgress] = useState(80);
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex-grow flex flex-col">
-        <Navbar />
+    <div className="flex flex-col min-h-screen bg-gray-100">
+      <Navbar />
+      <div className="flex-grow flex">
+        <Sidebar />
 
         <main className="flex-grow p-8">
           <div className="flex justify-between items-center mb-8">

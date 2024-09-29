@@ -18,15 +18,16 @@ function Settings() {
   };
 
   return (
-    <div className="flex">
+    <div className="flex flex-col">
+      <Navbar />
+      <div className="flex-grow flex">
       <Sidebar />
-      <div className="flex-grow flex flex-col">
-        <Navbar />
-        <div className="p-8">
+        <div className="p-8 w-full">
           <h1 className="text-4xl font-bold text-gray-800 mb-6">Settings</h1>
 
 
-          {/* Availability Settings */}
+          <div className='grid grid-flow-row'>
+            {/* Availability Settings */}
           <div className="border rounded-lg mb-6 shadow">
             <div className="bg-gray-200 p-4 cursor-pointer" onClick={() => toggleSection('availability')}>
               <h2 className="text-xl font-semibold">Manage Your Availability</h2>
@@ -73,7 +74,7 @@ function Settings() {
             </div>
             {activeSection === 'help' && <HelpSupport />}
           </div>
-
+          </div>
         </div>
       </div>
     </div>

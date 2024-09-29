@@ -118,11 +118,11 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div className="flex">
+    <div className="flex flex-col">
+      <Navbar />
+      <div className="flex-grow flex">
       <Sidebar />
-      <div className="flex-grow flex flex-col">
-        <Navbar />
-        <div className="p-8">
+        <div className="p-8 w-full">
           <div className="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
             <h1 className="text-3xl font-bold mb-6">Profile</h1>
             <div className="flex items-center mb-6">

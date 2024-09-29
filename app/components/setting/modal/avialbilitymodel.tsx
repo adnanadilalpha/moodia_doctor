@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { Switch } from '@headlessui/react';
 
@@ -20,35 +20,41 @@ interface AvailabilityModalProps {
 const AvailabilityModal: React.FC<AvailabilityModalProps> = ({ onClose }) => {
   const [availability, setAvailability] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [timezone, setTimezone] = useState<string>('UTC');  // Default timezone
+  const [timezone, setTimezone] = useState<string>('UTC'); // Default timezone
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const auth = getAuth();
   const firestore = getFirestore();
-
-  // Detect user's current timezone
-  useEffect(() => {
-    const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    setTimezone(detectedTimezone);
-  }, []);
 
   useEffect(() => {
     const fetchAvailability = async () => {
       const user = auth.currentUser;
       if (!user) return;
 
-      const availabilityRef = doc(firestore, 'availability', user.uid);
-      const docSnap = await getDoc(availabilityRef);
+      const doctorRef = doc(firestore, 'doctors', user.uid);
+      const docSnap = await getDoc(doctorRef);
 
       if (docSnap.exists()) {
-        setAvailability(docSnap.data()?.availability || []);
+        const doctorData = docSnap.data();
+        const savedAvailability = doctorData?.availability || [];
+        setAvailability(
+          daysOfWeek.map((day) => {
+            const existingSlot = savedAvailability.find((slot: TimeSlot) => slot.day === day);
+            return existingSlot
+              ? { ...existingSlot, enabled: true }
+              : { day, from: '09:00', to: '17:00', enabled: false };
+          })
+        );
+        setTimezone(doctorData?.timezone || 'UTC');
       } else {
         // Default state for availability (all days disabled, 9 AM to 5 PM)
-        setAvailability(daysOfWeek.map(day => ({
-          day,
-          from: '',
-          to: '',
-          enabled: false,
-        })));
+        setAvailability(
+          daysOfWeek.map((day) => ({
+            day,
+            from: '09:00',
+            to: '17:00',
+            enabled: false,
+          }))
+        );
       }
       setLoading(false);
     };
@@ -56,33 +62,36 @@ const AvailabilityModal: React.FC<AvailabilityModalProps> = ({ onClose }) => {
     fetchAvailability();
   }, [auth, firestore]);
 
+  // Toggle day availability
   const handleToggleDay = (day: string) => {
-    setAvailability(prev => prev.map(timeSlot => {
-      if (timeSlot.day === day) {
-        if (!timeSlot.enabled) {
-          // Automatically set default working hours (9 AM to 5 PM) when enabled
-          return { ...timeSlot, enabled: true, from: '09:00', to: '17:00' };
-        }
-        return { ...timeSlot, enabled: !timeSlot.enabled };
-      }
-      return timeSlot;
-    }));
+    setAvailability((prev) =>
+      prev.map((timeSlot) =>
+        timeSlot.day === day
+          ? {
+              ...timeSlot,
+              enabled: !timeSlot.enabled,
+              from: !timeSlot.enabled ? '09:00' : '',
+              to: !timeSlot.enabled ? '17:00' : '',
+            }
+          : timeSlot
+      )
+    );
   };
 
+  // Handle time change (from/to)
   const handleTimeChange = (day: string, timeType: 'from' | 'to', value: string) => {
-    setAvailability(prev => prev.map(timeSlot => {
-      if (timeSlot.day === day) {
-        return { ...timeSlot, [timeType]: value };
-      }
-      return timeSlot;
-    }));
+    setAvailability((prev) =>
+      prev.map((timeSlot) =>
+        timeSlot.day === day ? { ...timeSlot, [timeType]: value } : timeSlot
+      )
+    );
   };
 
   // Validation: Ensure end time is after start time
   const validateTimes = () => {
     const errors: { [key: string]: string } = {};
 
-    availability.forEach(slot => {
+    availability.forEach((slot) => {
       if (slot.enabled && slot.from && slot.to && slot.from >= slot.to) {
         errors[slot.day] = `End time must be after start time on ${slot.day}`;
       }
@@ -99,10 +108,29 @@ const AvailabilityModal: React.FC<AvailabilityModalProps> = ({ onClose }) => {
     if (!user) return;
 
     try {
-      const availabilityRef = doc(firestore, 'availability', user.uid);
-      await setDoc(availabilityRef, { availability, timezone }, { merge: true });
+      const doctorRef = doc(firestore, 'doctors', user.uid);
+
+      // Filter out disabled days before saving to Firebase
+      const enabledAvailability = availability
+        .filter((slot) => slot.enabled)
+        .map((slot) => ({
+          day: slot.day,
+          from: slot.from,
+          to: slot.to,
+        }));
+
+      // Save or update the availability in Firebase
+      await setDoc(
+        doctorRef,
+        {
+          availability: enabledAvailability,
+          timezone,
+        },
+        { merge: true } // Merging ensures we don't overwrite the entire document
+      );
+
       alert('Availability updated successfully!');
-      onClose();  // Close modal after saving
+      onClose(); // Close modal after saving
     } catch (error) {
       console.error('Error updating availability:', error);
     }
@@ -119,7 +147,7 @@ const AvailabilityModal: React.FC<AvailabilityModalProps> = ({ onClose }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
           <select
             value={timezone}
-            onChange={e => setTimezone(e.target.value)}
+            onChange={(e) => setTimezone(e.target.value)}
             className="block w-full p-2 border border-gray-300 rounded-md"
           >
             <option value="UTC">UTC</option>
@@ -135,50 +163,59 @@ const AvailabilityModal: React.FC<AvailabilityModalProps> = ({ onClose }) => {
         </div>
 
         <div className="space-y-4">
-          {daysOfWeek.map((day) => (
-            <div key={day} className="flex items-center justify-between">
-              <Switch.Group>
-                <div className="flex items-center">
-                  <Switch.Label className="mr-4 text-gray-900">{day}</Switch.Label>
-                  <Switch
-                    checked={availability.find(av => av.day === day)?.enabled || false}
-                    onChange={() => handleToggleDay(day)}
-                    className={`${availability.find(av => av.day === day)?.enabled ? 'bg-blue-500' : 'bg-gray-200'}
-                      relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none`}
-                  >
-                    <span
+          {daysOfWeek.map((day) => {
+            const currentDay = availability.find((av) => av.day === day) || {
+              day,
+              enabled: false,
+              from: '',
+              to: '',
+            };
+            return (
+              <div key={day} className="flex items-center justify-between">
+                <Switch.Group>
+                  <div className="flex items-center">
+                    <Switch.Label className="mr-4 text-gray-900">{day}</Switch.Label>
+                    <Switch
+                      checked={currentDay.enabled}
+                      onChange={() => handleToggleDay(day)}
                       className={`${
-                        availability.find(av => av.day === day)?.enabled ? 'translate-x-6' : 'translate-x-1'
-                      } inline-block h-4 w-4 transform bg-white rounded-full transition-transform`}
+                        currentDay.enabled ? 'bg-blue-500' : 'bg-gray-200'
+                      } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none`}
+                    >
+                      <span
+                        className={`${
+                          currentDay.enabled ? 'translate-x-6' : 'translate-x-1'
+                        } inline-block h-4 w-4 transform bg-white rounded-full transition-transform`}
+                      />
+                    </Switch>
+                  </div>
+                </Switch.Group>
+
+                {currentDay.enabled && (
+                  <div className="flex space-x-4">
+                    <input
+                      type="time"
+                      value={currentDay.from}
+                      onChange={(e) => handleTimeChange(day, 'from', e.target.value)}
+                      className="border border-gray-300 rounded-md p-1"
+                      required
                     />
-                  </Switch>
-                </div>
-              </Switch.Group>
+                    <span className="text-gray-500">to</span>
+                    <input
+                      type="time"
+                      value={currentDay.to}
+                      onChange={(e) => handleTimeChange(day, 'to', e.target.value)}
+                      className="border border-gray-300 rounded-md p-1"
+                      required
+                    />
+                  </div>
+                )}
 
-              {availability.find(av => av.day === day)?.enabled && (
-                <div className="flex space-x-4">
-                  <input
-                    type="time"
-                    value={availability.find(av => av.day === day)?.from || ''}
-                    onChange={e => handleTimeChange(day, 'from', e.target.value)}
-                    className="border border-gray-300 rounded-md p-1"
-                    required
-                  />
-                  <span className="text-gray-500">to</span>
-                  <input
-                    type="time"
-                    value={availability.find(av => av.day === day)?.to || ''}
-                    onChange={e => handleTimeChange(day, 'to', e.target.value)}
-                    className="border border-gray-300 rounded-md p-1"
-                    required
-                  />
-                </div>
-              )}
-
-              {/* Display validation error if end time is before start time */}
-              {errors[day] && <p className="text-red-500 text-xs mt-1">{errors[day]}</p>}
-            </div>
-          ))}
+                {/* Display validation error if end time is before start time */}
+                {errors[day] && <p className="text-red-500 text-xs mt-1">{errors[day]}</p>}
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-6 flex justify-end">

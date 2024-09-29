@@ -86,11 +86,11 @@ const BillingEarning: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex flex-col min-h-screen bg-gray-100">
+      <Navbar />
+      <div className="flex-grow flex">
       <Sidebar patientId="" />
-      <div className="flex-grow flex flex-col">
-        <Navbar />
-        <div className="p-6">
+        <div className="p-6 w-full">
           <h2 className="text-3xl font-semibold mb-6">Earnings and Billings</h2>
 
           {/* Time Range Filter */}

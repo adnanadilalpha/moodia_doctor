@@ -221,21 +221,21 @@ const MessagePage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {currentUser ? (
+    <div className="flex flex-col h-screen bg-gray-100">
+        <Navbar />
+      <div className="flex flex-grow">
+        {currentUser ? (
         <Sidebar patientId={userType === 'doctor' ? currentUser.uid : selectedChat?.doctorId} />
       ) : (
         <div>No user found</div>
       )}
-      <div className="flex flex-col flex-grow">
-        <Navbar />
-        <div className="flex-grow flex">
-          <div className="w-1/4 border-r bg-white">
+        <div className="flex-grow flex mt-8 ml-8">
+          <div className="w-1/4 border-r">
             <ChatList currentUser={currentUser} onSelectChat={setSelectedChat} />
           </div>
 
           <div className="w-3/4 flex flex-col">
-            <div className="flex-grow p-4 bg-gray-100 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 150px)' }}>
+            <div className="flex-grow p-4 bg-[#DAF6E4] overflow-y-auto" style={{ maxHeight: 'calc(100vh - 150px)' }}>
               {selectedChat ? (
                 loadingMessages ? (
                   <p>Loading messages...</p>

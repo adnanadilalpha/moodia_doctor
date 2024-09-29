@@ -65,10 +65,10 @@ const Appointments: React.FC = () => {
   const pastAppointments = appointments.filter(appointment => !appointment.isUpcoming);
 
   return (
-    <div className='flex min-h-screen bg-gray-100'>
+    <div className='flex flex-col min-h-screen bg-gray-100'>
+      <Navbar />
+      <div className="flex-grow flex">
       <Sidebar patientId='' />
-      <div className="flex-grow flex flex-col">
-        <Navbar />
         <div className='p-8'>
           <h1 className='text-4xl font-bold text-black mb-8'>Appointments</h1>
 
