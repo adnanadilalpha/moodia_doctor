@@ -3,7 +3,7 @@ import React from 'react';
 
 const Footer = () => {
   return (
-    <footer className="bg-white py-4 shadow-lg mt-auto">
+    <footer className="py-4 shadow-lg mt-auto">
       <div className="container mx-auto text-center text-gray-600">
         <p>&copy; 2024 Moodia. All rights reserved.</p>
       </div>

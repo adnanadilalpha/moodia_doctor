@@ -61,7 +61,8 @@ const HomePage = () => {
       <div className="flex-grow flex">
         <Sidebar />
 
-        <main className="flex-grow p-8">
+     <div className="flex flex-col w-full">
+     <main className="flex-grow p-8">
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-3xl font-bold text-gray-800">Hi, {userName}</h1> 
           </div>
@@ -80,6 +81,7 @@ const HomePage = () => {
         </main>
 
         <Footer />
+     </div>
       </div>
     </div>
   );
