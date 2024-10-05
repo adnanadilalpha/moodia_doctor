@@ -98,7 +98,7 @@ const PatientActivityCard: React.FC<PatientActivityProps> = () => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-semibold text-gray-700 mb-4">Total Patient Activity</h2>
-      <p className="text-gray-600">Today, {new Date().toLocaleDateString()}</p>
+      <p className="text-gray-600">Today, {new Date().toLocaleDateString('en-GB')}</p>
 
       {loading ? (
         <p>Loading session data...</p>

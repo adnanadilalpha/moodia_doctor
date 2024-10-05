@@ -59,7 +59,7 @@ const CalendarCard: React.FC = () => {
             const event: EventInput = {
               id: data.sessionId,
               title: `${data.name} - ${data.type}`,
-              start: data.dateTime.toDate(), // Convert Timestamp to Date
+              start: new Date(data.dateTime.seconds * 1000), // Convert Timestamp to Date
               extendedProps: {
                 ...data, // Include all data for easy access in modal
               },
@@ -87,8 +87,6 @@ const CalendarCard: React.FC = () => {
     setModalIsOpen(false);
     setSelectedEvent(null);
   };
-
-  
 
   const renderEventContent = (eventInfo: any) => {
     return (

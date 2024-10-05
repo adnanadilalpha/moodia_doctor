@@ -43,7 +43,7 @@ const ProgressCard: React.FC = () => {
 
           querySnapshot.forEach((doc) => {
             const data = doc.data() as Session;
-            const sessionDate = data.dateTime.toDate().setHours(0, 0, 0, 0); // Convert Firestore timestamp to JS Date (midnight)
+            const sessionDate = new Date(data.dateTime.seconds * 1000).setHours(0, 0, 0, 0); // Convert Firestore timestamp to JS Date (midnight)
 
             // Check if the session is booked for today
             if (sessionDate === today) {

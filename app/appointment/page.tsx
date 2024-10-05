@@ -86,7 +86,7 @@ const Appointments: React.FC = () => {
                           <div>
                             <h3 className="text-xl font-bold text-gray-800 mb-2">{appointment.name}</h3>
                             <p className="text-sm text-gray-500">{appointment.specialization}</p>
-                            <p className="text-sm text-gray-500 mt-2">{new Date(appointment.dateTime.toDate()).toLocaleString()}</p>
+                            <p className="text-sm text-gray-500 mt-2">{new Date(appointment.dateTime.seconds * 1000).toLocaleString()}</p>
                             <p className={`text-sm font-medium mt-1 ${appointment.type === 'Online' ? 'text-blue-500' : 'text-yellow-500'}`}>
                               {appointment.type === 'Online' ? 'Online Session' : 'In-Person Session'}
                             </p>
@@ -110,7 +110,7 @@ const Appointments: React.FC = () => {
                           <div>
                             <h3 className="text-xl font-bold text-gray-800 mb-2">{appointment.name}</h3>
                             <p className="text-sm text-gray-500">{appointment.specialization}</p>
-                            <p className="text-sm text-gray-500 mt-2">{new Date(appointment.dateTime.toDate()).toLocaleString()}</p>
+                            <p className="text-sm text-gray-500 mt-2">{new Date(appointment.dateTime.seconds * 1000).toLocaleString()}</p>
                             <p className={`text-sm font-medium mt-1 ${appointment.type === 'Online' ? 'text-blue-500' : 'text-yellow-500'}`}>
                               {appointment.type === 'Online' ? 'Online Session' : 'In-Person Session'}
                             </p>
