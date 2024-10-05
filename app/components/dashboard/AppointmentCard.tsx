@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
-import { FaVideo, FaComments } from "react-icons/fa";
+import { FaVideo, FaComments, FaPhoneSlash } from "react-icons/fa";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import {
   getFirestore,
@@ -25,6 +25,7 @@ interface AppointmentProps {
   videoCall: boolean;
   sessionId: string;
   patientId: string;
+  meetingUrl: string; // Meeting URL from Firebase session data
 }
 
 const AppointmentCard: React.FC = () => {
@@ -61,7 +62,7 @@ const AppointmentCard: React.FC = () => {
           const userData = userDocSnapshot.docs[0]?.data();
 
           setAppointment({
-            username: userData?.username || "Unknown Patient", // Fetch the patient's username
+            username: userData?.username || "Unknown Patient",
             type: data.type === "Online" ? "Online" : "In-Person",
             date: new Date(data.dateTime.toDate()).toLocaleDateString("en-US", {
               year: "numeric",
@@ -75,8 +76,11 @@ const AppointmentCard: React.FC = () => {
             }),
             videoCall: data.type === "Online",
             sessionId: docSnapshot.id,
-            patientId: data.userId, // `userId` here represents the patient's id
+            patientId: data.userId,
+            meetingUrl: data.meetingUrl || "", // Fetching the meetingUrl
           });
+        } else {
+          setAppointment(null); // No upcoming appointments
         }
       } catch (error) {
         console.error("Error fetching appointment:", error);
@@ -93,23 +97,31 @@ const AppointmentCard: React.FC = () => {
       }
     });
 
-    return () => unsubscribe();
-  }, [auth, db]);
-
-  const handleStartCall = () => {
-    const completeSession = async () => {
-      if (appointment) {
-        try {
-          const sessionRef = doc(db, "sessions", appointment.sessionId);
-          await updateDoc(sessionRef, { isCompleted: true, isUpcoming: false });
-        } catch (error) {
-          console.error("Error updating session status:", error);
-        }
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
       }
     };
-    router.push("/agora");
-    setTimeout(completeSession, 5000); // Delay completion by 5 seconds for the call
+  }, [auth, db]);
+
+  // Handle starting the video call and ensuring camera/mic permissions
+  const handleStartCall = () => {
+    if (appointment && appointment.meetingUrl) {
+      navigator.mediaDevices
+        .getUserMedia({ video: true, audio: true })
+        .then(() => {
+          router.push(`/meeting?url=${encodeURIComponent(appointment.meetingUrl)}`);
+        })
+        .catch((error) => {
+          console.error("Error accessing media devices:", error);
+          alert("Please allow access to camera and microphone to start the call.");
+        });
+    } else {
+      console.error("Meeting URL is missing.");
+      alert("Unable to start the call. Meeting URL is missing.");
+    }
   };
+  
 
   const handleStartChat = async () => {
     if (!appointment) return;
@@ -153,6 +165,8 @@ const AppointmentCard: React.FC = () => {
       try {
         const sessionRef = doc(db, "sessions", appointment.sessionId);
         await updateDoc(sessionRef, { isCompleted: true, isUpcoming: false });
+        alert("Session marked as completed.");
+        setAppointment(null);
       } catch (error) {
         console.error("Error marking in-person session as complete:", error);
       }
@@ -184,19 +198,30 @@ const AppointmentCard: React.FC = () => {
         <p className="text-gray-600">Location: {appointment.type}</p>
       </div>
       <div className="flex items-center justify-between mt-4 space-x-4">
-        <span className="text-gray-600">{appointment.date}, {appointment.time}</span>
+        <span className="text-gray-600">
+          {appointment.date}, {appointment.time}
+        </span>
         <div className="flex space-x-4">
           {appointment.videoCall ? (
-            <button onClick={handleStartCall} className="bg-green-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
+            <button
+              onClick={handleStartCall}
+              className="bg-green-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+            >
               <FaVideo />
               <span>Video Call</span>
             </button>
           ) : (
-            <button onClick={handleCompleteInPersonSession} className="bg-yellow-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
+            <button
+              onClick={handleCompleteInPersonSession}
+              className="bg-yellow-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+            >
               <span>Complete In-Person</span>
             </button>
           )}
-          <button onClick={handleStartChat} className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2">
+          <button
+            onClick={handleStartChat}
+            className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+          >
             <FaComments />
             <span>Chat</span>
           </button>
