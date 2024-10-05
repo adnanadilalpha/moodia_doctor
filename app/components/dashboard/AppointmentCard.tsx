@@ -61,19 +61,13 @@ const AppointmentCard: React.FC = () => {
           const userDocSnapshot = await getDocs(userQuery);
           const userData = userDocSnapshot.docs[0]?.data();
 
+          const date = data.dateTime ? new Date(data.dateTime) : null;
+
           setAppointment({
             username: userData?.username || "Unknown Patient",
             type: data.type === "Online" ? "Online" : "In-Person",
-            date: new Date(data.dateTime.toDate()).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "short",
-              day: "2-digit",
-            }),
-            time: new Date(data.dateTime.toDate()).toLocaleTimeString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: true,
-            }),
+            date: date ? date.toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "2-digit" }) : "Invalid Date",
+            time: date ? date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true }) : "Invalid Time",
             videoCall: data.type === "Online",
             sessionId: docSnapshot.id,
             patientId: data.userId,

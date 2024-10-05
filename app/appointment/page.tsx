@@ -10,7 +10,7 @@ interface Appointment {
   id: string;
   name: string;
   specialization: string;
-  dateTime: any; // Firestore Timestamp
+  dateTime: any; // Firestore Timestamp or ISO String
   type: string;
   isUpcoming: boolean;
   isCompleted: boolean;
@@ -64,6 +64,15 @@ const Appointments: React.FC = () => {
   const upcomingAppointments = appointments.filter(appointment => appointment.isUpcoming);
   const pastAppointments = appointments.filter(appointment => !appointment.isUpcoming);
 
+  const formatDateTime = (dateTime: any) => {
+    if (typeof dateTime === 'string') {
+      return new Date(dateTime).toLocaleString('en-GB', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
+    } else if (dateTime?.seconds) {
+      return new Date(dateTime.seconds * 1000).toLocaleString('en-GB', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
+    }
+    return 'Invalid Date';
+  };
+
   return (
     <div className='flex flex-col min-h-screen bg-gray-100'>
       <Navbar />
@@ -86,7 +95,7 @@ const Appointments: React.FC = () => {
                           <div>
                             <h3 className="text-xl font-bold text-gray-800 mb-2">{appointment.name}</h3>
                             <p className="text-sm text-gray-500">{appointment.specialization}</p>
-                            <p className="text-sm text-gray-500 mt-2">{new Date(appointment.dateTime.seconds * 1000).toLocaleString()}</p>
+                            <p className="text-sm text-gray-500 mt-2">{formatDateTime(appointment.dateTime)}</p>
                             <p className={`text-sm font-medium mt-1 ${appointment.type === 'Online' ? 'text-blue-500' : 'text-yellow-500'}`}>
                               {appointment.type === 'Online' ? 'Online Session' : 'In-Person Session'}
                             </p>
@@ -110,7 +119,7 @@ const Appointments: React.FC = () => {
                           <div>
                             <h3 className="text-xl font-bold text-gray-800 mb-2">{appointment.name}</h3>
                             <p className="text-sm text-gray-500">{appointment.specialization}</p>
-                            <p className="text-sm text-gray-500 mt-2">{new Date(appointment.dateTime.seconds * 1000).toLocaleString()}</p>
+                            <p className="text-sm text-gray-500 mt-2">{formatDateTime(appointment.dateTime)}</p>
                             <p className={`text-sm font-medium mt-1 ${appointment.type === 'Online' ? 'text-blue-500' : 'text-yellow-500'}`}>
                               {appointment.type === 'Online' ? 'Online Session' : 'In-Person Session'}
                             </p>
