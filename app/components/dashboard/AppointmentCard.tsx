@@ -2,10 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
-import { FaVideo, FaComments, FaPhoneSlash } from "react-icons/fa";
+import { FaVideo, FaComments, FaCheck, FaBan } from "react-icons/fa";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import {
-  getFirestore,
   collection,
   query,
   where,
@@ -14,8 +13,11 @@ import {
   getDocs,
   updateDoc,
   doc,
+  getDoc,
   addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
+import { db } from "../../firebase";
 
 interface AppointmentProps {
   username: string;
@@ -25,21 +27,38 @@ interface AppointmentProps {
   videoCall: boolean;
   sessionId: string;
   patientId: string;
-  meetingUrl: string; // Meeting URL from Firebase session data
+  meetingUrl: string;
 }
+
+const createNotification = async (doctorId: string, message: string) => {
+  try {
+    await addDoc(collection(db, "notifications"), {
+      doctorId,
+      message,
+      createdAt: serverTimestamp(),
+      read: false,
+    });
+  } catch (error) {
+    console.error("Error creating notification:", error);
+  }
+};
 
 const AppointmentCard: React.FC = () => {
   const [appointment, setAppointment] = useState<AppointmentProps | null>(null);
   const [loading, setLoading] = useState(true);
+  const [callStarted, setCallStarted] = useState(false);
   const router = useRouter();
   const auth = getAuth();
-  const db = getFirestore();
 
   useEffect(() => {
-    const fetchUpcomingAppointment = async (userId: string) => {
+    // Check if call has started from local storage
+    const storedCallStarted = localStorage.getItem('callStarted') === 'true';
+    setCallStarted(storedCallStarted);
+
+    const fetchUpcomingAppointment = async (doctorId: string) => {
       const q = query(
         collection(db, "sessions"),
-        where("doctorId", "==", userId),
+        where("doctorId", "==", doctorId),
         where("isUpcoming", "==", true),
         where("isCompleted", "==", false),
         orderBy("dateTime", "asc"),
@@ -52,26 +71,44 @@ const AppointmentCard: React.FC = () => {
           const docSnapshot = querySnapshot.docs[0];
           const data = docSnapshot.data();
 
-          // Fetch patient data based on the `userId` from the session
-          const userQuery = query(
-            collection(db, "users"),
-            where("userId", "==", data.userId),
-            limit(1)
-          );
-          const userDocSnapshot = await getDocs(userQuery);
-          const userData = userDocSnapshot.docs[0]?.data();
+          // Handle string dateTime format
+          let date: Date | null = null;
+          if (typeof data.dateTime === "string") {
+            date = new Date(data.dateTime);
+          }
 
-          const date = data.dateTime ? new Date(data.dateTime) : null;
+          const patientId = data.userId;
+          let patientName = "Patient";
+          if (patientId) {
+            const userDocRef = doc(db, "users", patientId);
+            const userDocSnapshot = await getDoc(userDocRef);
+            if (userDocSnapshot.exists()) {
+              const userData = userDocSnapshot.data();
+              patientName = userData.username || userData.name || "Patient";
+            }
+          }
 
           setAppointment({
-            username: userData?.username || "Unknown Patient",
+            username: patientName,
             type: data.type === "Online" ? "Online" : "In-Person",
-            date: date ? date.toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "2-digit" }) : "Invalid Date",
-            time: date ? date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true }) : "Invalid Time",
+            date: date
+              ? date.toLocaleDateString("en-GB", {
+                  year: "numeric",
+                  month: "short",
+                  day: "2-digit",
+                })
+              : "No Date",
+            time: date
+              ? date.toLocaleTimeString("en-GB", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                })
+              : "No Time",
             videoCall: data.type === "Online",
             sessionId: docSnapshot.id,
             patientId: data.userId,
-            meetingUrl: data.meetingUrl || "", // Fetching the meetingUrl
+            meetingUrl: data.meetingUrl || "",
           });
         } else {
           setAppointment(null); // No upcoming appointments
@@ -85,7 +122,7 @@ const AppointmentCard: React.FC = () => {
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        fetchUpcomingAppointment(user.uid); // Fetch based on current logged-in doctor (userId)
+        fetchUpcomingAppointment(user.uid);
       } else {
         setLoading(false);
       }
@@ -96,73 +133,58 @@ const AppointmentCard: React.FC = () => {
         unsubscribe();
       }
     };
-  }, [auth, db]);
+  }, [auth]);
 
-  // Handle starting the video call and ensuring camera/mic permissions
-  const handleStartCall = () => {
+  const handleStartCall = async () => {
     if (appointment && appointment.meetingUrl) {
-      navigator.mediaDevices
-        .getUserMedia({ video: true, audio: true })
-        .then(() => {
-          router.push(`/meeting?url=${encodeURIComponent(appointment.meetingUrl)}`);
-        })
-        .catch((error) => {
-          console.error("Error accessing media devices:", error);
-          alert("Please allow access to camera and microphone to start the call.");
-        });
+      try {
+        await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        await createNotification(
+          auth.currentUser?.uid || "",
+          `Video call started with ${appointment.username}`
+        );
+        setCallStarted(true);
+        localStorage.setItem('callStarted', 'true');
+        router.push(`/meeting?url=${encodeURIComponent(appointment.meetingUrl)}`);
+      } catch (error) {
+        console.error("Error accessing media devices:", error);
+        alert("Please allow access to camera and microphone to start the call.");
+      }
     } else {
-      console.error("Meeting URL is missing.");
       alert("Unable to start the call. Meeting URL is missing.");
     }
   };
-  
 
-  const handleStartChat = async () => {
-    if (!appointment) return;
-
-    const chatRef = collection(db, "chats");
-    const q = query(
-      chatRef,
-      where("doctorId", "==", auth.currentUser?.uid),
-      where("patientId", "==", appointment.patientId),
-      limit(1)
-    );
-
-    try {
-      const querySnapshot = await getDocs(q);
-      let chatId: string;
-
-      if (!querySnapshot.empty) {
-        // Chat already exists
-        chatId = querySnapshot.docs[0].id;
-      } else {
-        // Create a new chat if it doesn't exist
-        const newChatRef = await addDoc(collection(db, "chats"), {
-          doctorId: auth.currentUser?.uid,
-          patientId: appointment.patientId,
-          createdAt: new Date(),
-          lastMessage: "", // Initialize empty message
-          unreadMessages: 0,
-        });
-        chatId = newChatRef.id;
-      }
-
-      // Navigate to the chat page with the chatId
-      router.push(`/message/${chatId}`);
-    } catch (error) {
-      console.error("Error starting chat:", error);
-    }
-  };
-
-  const handleCompleteInPersonSession = async () => {
+  const handleCompleteSession = async () => {
     if (appointment) {
       try {
         const sessionRef = doc(db, "sessions", appointment.sessionId);
         await updateDoc(sessionRef, { isCompleted: true, isUpcoming: false });
-        alert("Session marked as completed.");
+        await createNotification(
+          auth.currentUser?.uid || "",
+          `Session completed with ${appointment.username}`
+        );
+        setAppointment(null);
+        setCallStarted(false);
+        localStorage.removeItem('callStarted');
+      } catch (error) {
+        console.error("Error marking session as complete:", error);
+      }
+    }
+  };
+
+  const handleCancelAppointment = async () => {
+    if (appointment) {
+      try {
+        const sessionRef = doc(db, "sessions", appointment.sessionId);
+        await updateDoc(sessionRef, { isUpcoming: false, isCompleted: false, status: "Cancelled" });
+        await createNotification(
+          auth.currentUser?.uid || "",
+          `Appointment with ${appointment.username} has been cancelled`
+        );
         setAppointment(null);
       } catch (error) {
-        console.error("Error marking in-person session as complete:", error);
+        console.error("Error cancelling appointment:", error);
       }
     }
   };
@@ -185,18 +207,16 @@ const AppointmentCard: React.FC = () => {
   }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md flex flex-col justify-between">
+    <div className="bg-white p-6 rounded-lg shadow-md flex flex-col justify-between space-y-4">
       <div>
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Upcoming Appointment</h2>
         <p className="text-gray-600 mb-2">Patient: {appointment.username}</p>
         <p className="text-gray-600">Location: {appointment.type}</p>
+        <span className="text-gray-600">{appointment.date}, {appointment.time}</span>
       </div>
       <div className="flex items-center justify-between mt-4 space-x-4">
-        <span className="text-gray-600">
-          {appointment.date}, {appointment.time}
-        </span>
-        <div className="flex space-x-4">
-          {appointment.videoCall ? (
+        <div className="flex items-center space-x-2">
+          {appointment?.videoCall && !callStarted ? (
             <button
               onClick={handleStartCall}
               className="bg-green-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
@@ -206,20 +226,38 @@ const AppointmentCard: React.FC = () => {
             </button>
           ) : (
             <button
-              onClick={handleCompleteInPersonSession}
-              className="bg-yellow-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+              onClick={handleCompleteSession}
+              className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
             >
-              <span>Complete In-Person</span>
+              <FaCheck />
+              <span>Complete</span>
             </button>
           )}
           <button
-            onClick={handleStartChat}
+            onClick={() => router.push(`/chat?chatId=${appointment?.sessionId}`)}
             className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
           >
             <FaComments />
             <span>Chat</span>
           </button>
         </div>
+        {!callStarted ? (
+          <button
+            onClick={handleCancelAppointment}
+            className="bg-red-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+          >
+            <FaBan />
+            <span>Cancel</span>
+          </button>
+        ) : (
+          <button
+            onClick={handleCompleteSession}
+            className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+          >
+            <FaCheck />
+            <span>Complete</span>
+          </button>
+        )}
       </div>
     </div>
   );

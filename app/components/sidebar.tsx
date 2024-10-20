@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { FaCalendarAlt, FaUserMd, FaCog, FaSignOutAlt, FaMoneyBill } from 'react-icons/fa';
-import { FaMessage, FaMoneyBill1, FaMoneyBill1Wave, FaMoneyBillTrendUp, FaMoneyCheckDollar } from 'react-icons/fa6';
+import { FaCalendarAlt, FaUserMd, FaCog, FaSignOutAlt } from 'react-icons/fa';
+import { FaMessage, FaMoneyBillTrendUp } from 'react-icons/fa6';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase'; // Adjust the path as needed
+import { auth, db } from '../firebase'; // Ensure correct firebase initialization
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import Link from 'next/link';
 
 interface SidebarProps {
@@ -14,6 +16,45 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = () => {
   const pathname = usePathname();
   const router = useRouter();
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0); // To track unread messages count
+
+  // Fetch unread messages count
+  useEffect(() => {
+    const fetchUnreadMessages = () => {
+      if (!auth.currentUser) {
+        console.error("No current user");
+        return;
+      }
+
+      const q = query(
+        collection(db, 'chats'),
+        where('doctorId', '==', auth.currentUser.uid),
+        where('unreadMessages', '>', 0)
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        let totalUnread = 0;
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log("Fetched data:", data); // Log the fetched data to confirm it's working
+          totalUnread += data.unreadMessages || 0;
+        });
+
+        console.log("Total unread messages:", totalUnread); // Log the total unread messages count
+        setUnreadMessagesCount(totalUnread); // Update state with total unread messages
+      });
+
+      return unsubscribe;
+    };
+
+    const unsubscribe = fetchUnreadMessages();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe(); // Cleanup subscription on unmount
+      }
+    };
+  }, []);
 
   // Logout function
   const handleLogout = async () => {
@@ -54,7 +95,7 @@ const Sidebar: React.FC<SidebarProps> = () => {
           </div>
         </Link>
 
-        {/* Messages Link */}
+        {/* Messages Link with unread badge */}
         <Link href="/chat">
           <div
             className={`flex items-center space-x-6 p-4 rounded-lg ${
@@ -65,6 +106,11 @@ const Sidebar: React.FC<SidebarProps> = () => {
           >
             <FaMessage className="w-6 h-6" />
             <span>Messages</span>
+            {unreadMessagesCount > 0 && (
+              <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                {unreadMessagesCount}
+              </span>
+            )}
           </div>
         </Link>
 

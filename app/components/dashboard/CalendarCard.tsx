@@ -1,33 +1,44 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
+import moment from 'moment';
 import { auth, db } from '@/app/firebase'; // Adjust the path to your Firebase configuration
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import { EventClickArg, EventInput, EventApi } from '@fullcalendar/core';
+import { collection, query, where, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 type Session = {
-  dateTime: Timestamp;
+  dateTime: Timestamp | string | { seconds: number };
   doctorId: string;
   isCompleted: boolean;
   isUpcoming: boolean;
-  name: string;
-  sessionId: string;
-  specialization: string;
-  type: string;
   userId: string;
+  sessionId: string;
+  type: string;
+  // ... other fields
 };
 
-const CalendarCard: React.FC = () => {
-  const [currentEvents, setCurrentEvents] = useState<EventInput[]>([]);
-  const [modalIsOpen, setModalIsOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<EventApi | null>(null);
-  const [doctorId, setDoctorId] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true); // For loading state
+type CalendarEvent = {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  resource: Session & { patientName: string };
+};
 
+type UserData = {
+  username: string;
+  // add other fields that exist in your user document
+};
+
+const localizer = momentLocalizer(moment);
+
+const CalendarCard: React.FC = () => {
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [doctorId, setDoctorId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true); // For loading state
   const [error, setError] = useState<string>(''); // For error handling
 
   // Get current doctorId
@@ -36,8 +47,8 @@ const CalendarCard: React.FC = () => {
       if (user) {
         setDoctorId(user.uid);
       } else {
-        // Redirect to login if not authenticated
-        // router.push('/login');
+        setDoctorId(null);
+        setError('User not authenticated');
       }
     });
     return () => unsubscribe();
@@ -46,27 +57,46 @@ const CalendarCard: React.FC = () => {
   // Fetch sessions when doctorId changes
   useEffect(() => {
     if (doctorId) {
-      // Fetch sessions
       const fetchSessions = async () => {
         try {
           const sessionsRef = collection(db, 'sessions');
           const q = query(sessionsRef, where('doctorId', '==', doctorId));
           const querySnapshot = await getDocs(q);
-          const events: EventInput[] = [];
-          querySnapshot.forEach((doc) => {
-            const data = doc.data() as Session;
-            // Map the session data to EventInput
-            const event: EventInput = {
-              id: data.sessionId,
-              title: `${data.name} - ${data.type}`,
-              start: new Date(data.dateTime.seconds * 1000), // Convert Timestamp to Date
-              extendedProps: {
-                ...data, // Include all data for easy access in modal
-              },
-            };
-            events.push(event);
-          });
-          setCurrentEvents(events);
+          
+          const fetchedEvents: CalendarEvent[] = await Promise.all(
+            querySnapshot.docs.map(async (docSnapshot) => {
+              const data = docSnapshot.data() as Session;
+              
+              // Fetch patient name from users collection
+              const userDocRef = doc(db, 'users', data.userId);
+              const userDocSnap = await getDoc(userDocRef);
+              const userData = userDocSnap.data() as UserData | undefined;
+              const patientName = userData?.username || 'Unknown Patient';
+              
+              let startDate: Date;
+              if (data.dateTime instanceof Timestamp) {
+                startDate = data.dateTime.toDate();
+              } else if (typeof data.dateTime === 'string') {
+                startDate = new Date(data.dateTime);
+              } else if (typeof data.dateTime === 'object' && 'seconds' in data.dateTime) {
+                startDate = new Date(data.dateTime.seconds * 1000);
+              } else {
+                console.error('Unexpected dateTime format:', data.dateTime);
+                startDate = new Date();
+              }
+              
+              const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+              return {
+                id: data.sessionId,
+                title: `${patientName} - ${data.type}`,
+                start: startDate,
+                end: endDate,
+                resource: { ...data, patientName },
+              };
+            })
+          );
+          
+          setEvents(fetchedEvents);
         } catch (error) {
           console.error('Error fetching sessions:', error);
           setError('Failed to load appointments. Please try again later.');
@@ -78,77 +108,102 @@ const CalendarCard: React.FC = () => {
     }
   }, [doctorId]);
 
-  const handleEventClick = (clickInfo: EventClickArg) => {
-    setSelectedEvent(clickInfo.event);
-    setModalIsOpen(true);
+  const handleSelectEvent = (event: CalendarEvent) => {
+    setSelectedEvent(event);
   };
 
   const closeModal = () => {
-    setModalIsOpen(false);
     setSelectedEvent(null);
   };
 
-  const renderEventContent = (eventInfo: any) => {
+  const eventStyleGetter = (event: CalendarEvent) => {
+    const isUpcoming = event.resource.isUpcoming;
+    const backgroundColor = isUpcoming ? 'bg-primary-500' : 'bg-accent-500';
+    return {
+      className: `${backgroundColor} text-white rounded-lg p-1`,
+      style: {
+        border: 'none',
+      },
+    };
+  };
+
+  const renderEventContent = (event: CalendarEvent) => {
     return (
-      <div className="flex flex-col text-xs md:text-sm">
-        <strong>{eventInfo.timeText}</strong>
-        <span>{eventInfo.event.title}</span>
+      <div>
+        <div className="font-semibold">{event.resource.patientName}</div>
+        <div>{event.resource.type}</div>
+        <div>{event.resource.isUpcoming ? 'Upcoming' : 'Previous'}</div>
       </div>
     );
   };
 
-  const formatDateTime = (date: Date) => {
-    return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-  };
+  if (loading) {
+    return <div className="text-center p-4">Loading appointments...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center text-red-500 p-4">{error}</div>;
+  }
 
   return (
     <div className="bg-white p-4 md:p-6 rounded-lg shadow-md">
-      <h2 className="text-xl font-semibold text-gray-700 mb-4">Your Appointments</h2>
-      <div className="bg-gray-50 rounded-lg p-4">
-        {loading ? (
-          <p>Loading appointments...</p>
-        ) : error ? (
-          <p className="text-red-500">{error}</p>
-        ) : (
-          <FullCalendar
-            plugins={[dayGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            events={currentEvents}
-            eventClick={handleEventClick}
-            eventContent={renderEventContent}
-            height="auto"
-            eventDisplay="block"
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth',
-            }}
-            contentHeight="auto"
-            aspectRatio={1.5}
-          />
-        )}
+      <h2 className="text-2xl font-semibold text-gray-800 mb-6">Your Appointments</h2>
+      <div className="bg-gray-50 rounded-lg p-4" style={{ height: '600px' }}>
+        <Calendar
+          localizer={localizer}
+          events={events}
+          startAccessor="start"
+          endAccessor="end"
+          onSelectEvent={handleSelectEvent}
+          eventPropGetter={eventStyleGetter}
+          components={{
+            event: (props) => renderEventContent(props.event),
+          }}
+          views={[Views.MONTH, Views.WEEK, Views.DAY]}
+          defaultView={Views.MONTH}
+          className="rounded-lg overflow-hidden"
+          messages={{
+            next: "Next",
+            previous: "Back",
+            today: "Today",
+            month: "Month",
+            week: "Week",
+            day: "Day"
+          }}
+        />
       </div>
 
-      {/* Modal for displaying appointment details */}
-      {modalIsOpen && selectedEvent && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg mx-auto">
-            <h2 className="text-2xl font-bold mb-4">{selectedEvent.extendedProps?.name}</h2>
-            <p className="text-base mb-2">
-              <strong>Date and Time:</strong>{' '}
-              {formatDateTime(selectedEvent.start as Date)}
-            </p>
-            <p className="text-base mb-2">
-              <strong>Session Type:</strong> {selectedEvent.extendedProps?.type}
-            </p>
-            <p className="text-base mb-2">
-              <strong>Specialization:</strong>{' '}
-              {selectedEvent.extendedProps?.specialization}
-            </p>
-
+      {selectedEvent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-4">{selectedEvent.resource.patientName}</h3>
+            <p className="mb-2"><strong>Date:</strong> {moment(selectedEvent.start).format('MMMM D, YYYY')}</p>
+            <p className="mb-2"><strong>Time:</strong> {moment(selectedEvent.start).format('h:mm A')} - {moment(selectedEvent.end).format('h:mm A')}</p>
+            <p className="mb-2"><strong>Type:</strong> {selectedEvent.resource.type}</p>
+            <p className="mb-4"><strong>Status:</strong> {selectedEvent.resource.isUpcoming ? 'Upcoming' : 'Previous'}</p>
+            
+            {selectedEvent.resource.isUpcoming && (
+              <div className="flex space-x-2 mb-4">
+                {selectedEvent.resource.type === 'Online' ? (
+                  <>
+                    <button className="bg-primary-500 text-white py-2 px-4 rounded-lg hover:bg-primary-600 transition duration-200">
+                      Call Now
+                    </button>
+                    <button className="bg-accent-500 text-white py-2 px-4 rounded-lg hover:bg-accent-600 transition duration-200">
+                      Chat
+                    </button>
+                  </>
+                ) : (
+                  <button className="bg-accent-500 text-white py-2 px-4 rounded-lg hover:bg-accent-600 transition duration-200">
+                    Chat
+                  </button>
+                )}
+              </div>
+            )}
+            
             <button
               onClick={closeModal}
-              className="mt-6 px-4 py-2 bg-primary text-black rounded hover:bg-primary-dark w-full"
+              className="w-full bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition duration-200"
             >
               Close
             </button>

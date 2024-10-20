@@ -11,69 +11,58 @@ import DataPrivacySettings from '../components/setting/managedate';
 import HelpSupport from '../components/setting/needassistence';
 
 function Settings() {
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>('availability');
 
-  const toggleSection = (section: string) => {
-    setActiveSection(activeSection === section ? null : section);
+  const settingSections = [
+    { id: 'availability', title: 'Manage Your Availability', icon: '🗓️' },
+    { id: 'notifications', title: 'Control Notifications', icon: '🔔' },
+    { id: 'payment', title: 'Payment and Billing Information', icon: '💳' },
+    { id: 'security', title: 'Security & Privacy', icon: '🔒' },
+    { id: 'data', title: 'Manage Data and Privacy', icon: '📊' },
+    { id: 'help', title: 'Need Assistance?', icon: '❓' },
+  ];
+
+  const renderSettingContent = () => {
+    switch (activeSection) {
+      case 'availability': return <AvailabilitySettings />;
+      case 'notifications': return <NotificationSettings />;
+      case 'payment': return <PaymentSettings />;
+      case 'security': return <SecuritySettings />;
+      case 'data': return <DataPrivacySettings />;
+      case 'help': return <HelpSupport />;
+      default: return null;
+    }
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col min-h-screen bg-gray-100">
       <Navbar />
       <div className="flex-grow flex">
-      <Sidebar />
-        <div className="p-8 w-full">
-          <h1 className="text-4xl font-bold text-gray-800 mb-6">Settings</h1>
-
-
-          <div className='grid grid-flow-row'>
-            {/* Availability Settings */}
-          <div className="border rounded-lg mb-6 shadow">
-            <div className="bg-gray-200 p-4 cursor-pointer" onClick={() => toggleSection('availability')}>
-              <h2 className="text-xl font-semibold">Manage Your Availability</h2>
+        <Sidebar />
+        <div className="flex-grow p-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-6">Settings</h1>
+          <div className="bg-white rounded-lg shadow-md">
+            <div className="grid grid-cols-12 gap-0">
+              <div className="col-span-4 border-r border-gray-200">
+                {settingSections.map((section) => (
+                  <div
+                    key={section.id}
+                    className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors duration-150 ${
+                      activeSection === section.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                    }`}
+                    onClick={() => setActiveSection(section.id)}
+                  >
+                    <div className="flex items-center">
+                      <span className="text-xl mr-3">{section.icon}</span>
+                      <h2 className="text-lg font-medium text-gray-700">{section.title}</h2>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="col-span-8 p-6">
+                {renderSettingContent()}
+              </div>
             </div>
-            {activeSection === 'availability' && <AvailabilitySettings />}
-          </div>
-
-          {/* Notification Settings */}
-          <div className="border rounded-lg mb-6 shadow">
-            <div className="bg-gray-200 p-4 cursor-pointer" onClick={() => toggleSection('notifications')}>
-              <h2 className="text-xl font-semibold">Control Notifications</h2>
-            </div>
-            {activeSection === 'notifications' && <NotificationSettings />}
-          </div>
-
-          {/* Payment & Billing Settings */}
-          <div className="border rounded-lg mb-6 shadow">
-            <div className="bg-gray-200 p-4 cursor-pointer" onClick={() => toggleSection('payment')}>
-              <h2 className="text-xl font-semibold">Payment and Billing Information</h2>
-            </div>
-            {activeSection === 'payment' && <PaymentSettings />}
-          </div>
-
-          {/* Security Settings */}
-          <div className="border rounded-lg mb-6 shadow">
-            <div className="bg-gray-200 p-4 cursor-pointer" onClick={() => toggleSection('security')}>
-              <h2 className="text-xl font-semibold">Security & Privacy</h2>
-            </div>
-            {activeSection === 'security' && <SecuritySettings />}
-          </div>
-
-          {/* Data & Privacy Settings */}
-          <div className="border rounded-lg mb-6 shadow">
-            <div className="bg-gray-200 p-4 cursor-pointer" onClick={() => toggleSection('data')}>
-              <h2 className="text-xl font-semibold">Manage Data and Privacy</h2>
-            </div>
-            {activeSection === 'data' && <DataPrivacySettings />}
-          </div>
-
-          {/* Help & Support */}
-          <div className="border rounded-lg mb-6 shadow">
-            <div className="bg-gray-200 p-4 cursor-pointer" onClick={() => toggleSection('help')}>
-              <h2 className="text-xl font-semibold">Need Assistance?</h2>
-            </div>
-            {activeSection === 'help' && <HelpSupport />}
-          </div>
           </div>
         </div>
       </div>

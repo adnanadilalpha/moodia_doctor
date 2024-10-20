@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react"; // Ensure useState is imported
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
 
 interface UserProfile {
@@ -23,6 +23,7 @@ interface ChatListProps {
 const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null); // Declare state variables for activeChatId
   const firestore = getFirestore();
 
   // Function to fetch user profile from 'users' collection using patientId
@@ -32,10 +33,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
       if (userDoc.exists()) {
         const userData = userDoc.data();
         
-        // Check if 'username', 'displayName', or fallback to "No Name"
         const name = userData?.username || userData?.displayName || "No Name";
-
-        // Use 'photoURL' for profilePicture or fallback to a placeholder
         const profilePicture = userData?.photoURL || "";
 
         return {
@@ -43,14 +41,13 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
           profilePicture,
         };
       } else {
-        // Return default values if user data does not exist
         return {
           name: "No Name",
           profilePicture: "",
         };
       }
     } catch (error) {
-      console.error(`Error fetching patient profile from users collection:`, error);
+      console.error(`Error fetching patient profile:`, error);
       return {
         name: "No Name",
         profilePicture: "",
@@ -61,7 +58,6 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
   useEffect(() => {
     if (!currentUser) return;
 
-    // Fetch only the chats where doctorId matches the current user's ID
     const q = query(collection(firestore, "chats"), where("doctorId", "==", currentUser.uid));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
@@ -70,16 +66,15 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
       for (const docSnapshot of snapshot.docs) {
         const chatData = docSnapshot.data() as Chat;
 
-        // Fetch the patient profile from 'users' collection using the patientId
         const patientProfile = await fetchPatientProfile(chatData.patientId);
 
         chatList.push({
           id: docSnapshot.id,
-          doctorId: chatData.doctorId, // Keeping doctorId for potential future use
+          doctorId: chatData.doctorId,
           patientId: chatData.patientId,
           lastMessage: chatData.lastMessage,
           unreadMessages: chatData.unreadMessages,
-          patientProfile, // Only using patient profile
+          patientProfile,
         });
       }
 
@@ -91,8 +86,9 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
   }, [currentUser, firestore]);
 
   const handleChatSelect = async (chat: Chat) => {
-    if (currentUser?.email?.includes("doctor") && chat.unreadMessages > 0) {
-      // If the user is a doctor and the chat has unread messages, update unread messages to zero
+    setActiveChatId(chat.id); // Track the active chat
+
+    if (currentUser?.uid === chat.doctorId && chat.unreadMessages > 0) {
       try {
         const chatDocRef = doc(firestore, "chats", chat.id);
         await updateDoc(chatDocRef, {
@@ -102,10 +98,41 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
         console.error("Error updating unread messages:", error);
       }
     }
-    // Call onSelectChat to open the selected chat
     onSelectChat(chat);
   };
 
+  useEffect(() => {
+    if (!currentUser || !currentUser.uid) {
+      console.error("currentUser or currentUser.uid is undefined");
+      return;
+    }
+  
+    const listenForNewMessages = () => {
+      const q = query(collection(firestore, "chats"), where("doctorId", "==", currentUser.uid));
+  
+      return onSnapshot(q, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          const chatData = change.doc.data() as Chat;
+  
+          // Check if chatData and chatData.id are valid before proceeding
+          if (change.type === "modified" && activeChatId !== chatData.id && chatData.id) {
+            const chatDocRef = doc(firestore, "chats", chatData.id);
+  
+            updateDoc(chatDocRef, {
+              unreadMessages: chatData.unreadMessages + 1,
+            }).catch((error) => {
+              console.error("Error updating unread messages:", error);
+            });
+          }
+        });
+      });
+    };
+  
+    const unsubscribe = listenForNewMessages();
+  
+    return () => unsubscribe();
+  }, [currentUser, firestore, activeChatId]);
+  
   if (loadingChats) {
     return (
       <div className="flex justify-center items-center h-full">
@@ -122,8 +149,10 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectChat }) => {
           chats.map((chat) => (
             <div
               key={chat.id}
-              className="p-4 border-b cursor-pointer flex justify-between items-center hover:bg-gray-50 rounded-lg transition"
-              onClick={() => handleChatSelect(chat)} // Pass the selected chat and handle unread messages
+              className={`p-4 border-b cursor-pointer flex justify-between items-center hover:bg-gray-50 rounded-lg transition ${
+                activeChatId === chat.id ? "bg-gray-100" : ""
+              }`}
+              onClick={() => handleChatSelect(chat)}
             >
               <div className="flex items-center">
                 {chat.patientProfile?.profilePicture ? (

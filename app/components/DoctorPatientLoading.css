@@ -1,0 +1,59 @@
+/* Full-screen background styling */
+.loading-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  background: linear-gradient(135deg, #cbe8f7, #a0d0e4);
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+/* Container for the logo and animation */
+.scene-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+/* Logo Styling */
+.logo-container {
+  position: absolute;
+  top: -60px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 10px 20px;
+  border-radius: 30px;
+}
+
+.moodia-logo {
+  height: 50px;
+}
+
+/* Lottie Animation Container */
+.lottie-animation {
+  width: 400px; /* Adjust size as needed */
+  height: 400px; /* Adjust size as needed */
+}
+
+/* Connecting text */
+.loading-text {
+  font-size: 24px;
+  color: #333;
+  font-weight: bold;
+  animation: pulse 1.5s infinite;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  margin-top: 20px;
+}
+
+/* Pulse animation for the text */
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}

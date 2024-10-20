@@ -18,6 +18,7 @@ import { faGoogle } from '@fortawesome/free-brands-svg-icons'; // Import Google 
 const SignupPage = () => {
   const [fullName, setFullName] = useState('');
   const [specialization, setSpecialization] = useState('');
+  const [LicenseNumber, setLicenseNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -146,6 +147,7 @@ const SignupPage = () => {
         fullName: fullName,
         email: email,
         specialization: specialization,
+        LicenseNumber: LicenseNumber,
         userType: 'doctor',
       });
 
@@ -284,6 +286,25 @@ const SignupPage = () => {
                 />
                 {fieldErrors.specialization && (
                   <p className="mt-1 text-sm text-red-600">{fieldErrors.specialization}</p>
+                )}
+              </div>
+
+                            {/* License number */}
+                            <div>
+                <label className="block text-gray-700 font-medium mb-1">License Number</label>
+                <input
+                  type="text"
+                  placeholder="Your License number"
+                  value={LicenseNumber}
+                  onChange={(e) => setLicenseNumber(e.target.value)}
+                  className={`w-full p-3 border ${
+                    fieldErrors.LicenseNumber ? 'border-red-500' : 'border-gray-300'
+                  } rounded-lg focus:outline-none focus:ring-2 ${
+                    fieldErrors.LicenseNumber ? 'focus:ring-red-500' : 'focus:ring-primary'
+                  }`}
+                />
+                {fieldErrors.LicenseNumber && (
+                  <p className="mt-1 text-sm text-red-600">{fieldErrors.LicenseNumber}</p>
                 )}
               </div>
 

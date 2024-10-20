@@ -61,10 +61,13 @@ const MessagePage: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Helper function to scroll to the bottom of the chat
   const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
   // Fetch patient profile from the 'users' collection
@@ -74,8 +77,8 @@ const MessagePage: React.FC = () => {
       if (userDoc.exists()) {
         const userData = userDoc.data();
         setPatientProfile({
-          name: userData?.displayName || 'No Name',
-          profilePicture: userData?.photoURL || '/default-avatar.png',
+          name: userData?.username || 'patient',
+          profilePicture: userData?.photoURL || '/user_avatar.png',
         });
       }
     } catch (error) {
@@ -90,8 +93,8 @@ const MessagePage: React.FC = () => {
       if (doctorDoc.exists()) {
         const doctorData = doctorDoc.data();
         setDoctorProfile({
-          name: doctorData?.fullName || 'No Name',
-          profilePicture: doctorData?.photoURL || '/default-avatar.png',
+          name: doctorData?.fullName || 'doctor',
+          profilePicture: doctorData?.photoURL || '/user_avatar.png',
         });
       }
     } catch (error) {
@@ -222,20 +225,24 @@ const MessagePage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
-        <Navbar />
-      <div className="flex flex-grow">
+      <Navbar />
+      <div className="flex flex-grow overflow-hidden">
         {currentUser ? (
-        <Sidebar patientId={userType === 'doctor' ? currentUser.uid : selectedChat?.doctorId} />
-      ) : (
-        <div>No user found</div>
-      )}
-        <div className="flex-grow flex mt-8 ml-8">
-          <div className="w-1/4 border-r">
+          <Sidebar patientId={userType === 'doctor' ? currentUser.uid : selectedChat?.doctorId} />
+        ) : (
+          <div>No user found</div>
+        )}
+        <div className="flex-grow flex flex-col md:flex-row mt-8">
+          <div className="w-full md:w-1/3 lg:w-1/4 border-r border-gray-200">
             <ChatList currentUser={currentUser} onSelectChat={setSelectedChat} />
           </div>
 
-          <div className="w-3/4 flex flex-col">
-            <div className="flex-grow p-4 bg-[#DAF6E4] overflow-y-auto" style={{ maxHeight: 'calc(100vh - 150px)' }}>
+          <div className="w-full md:w-2/3 lg:w-3/4 flex flex-col">
+            <div 
+              ref={messagesContainerRef}
+              className="flex-grow p-4 bg-white overflow-y-auto"
+              style={{ maxHeight: 'calc(100vh - 150px)' }}
+            >
               {selectedChat ? (
                 loadingMessages ? (
                   <p>Loading messages...</p>
@@ -247,8 +254,10 @@ const MessagePage: React.FC = () => {
                         className={`flex mb-4 ${msg.senderId === currentUser?.uid ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`p-3 rounded-lg max-w-xs break-words ${
-                            msg.senderId === currentUser?.uid ? 'bg-primary text-white' : 'bg-gray-200 text-black'
+                          className={`p-3 rounded-lg max-w-xs md:max-w-sm lg:max-w-md break-words ${
+                            msg.senderId === currentUser?.uid
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-gray-100 text-gray-800'
                           }`}
                         >
                           <div className="flex items-center mb-2">
@@ -288,53 +297,60 @@ const MessagePage: React.FC = () => {
                         </div>
                       </div>
                     ))}
-                    <div ref={chatEndRef} />
                   </>
                 )
               ) : (
-                <div className="text-center">Select a conversation to start chatting</div>
+                <div className="text-center text-gray-500">Select a conversation to start chatting</div>
               )}
             </div>
 
             {selectedChat && (
               <form className="p-4 bg-white flex items-center border-t" onSubmit={handleSendMessage}>
-                <label htmlFor="fileInputDocument" className="cursor-pointer">
-                  <FaPaperclip className="text-gray-500 mr-4" />
-                </label>
-                <input
-                  type="file"
-                  id="fileInputDocument"
-                  className="hidden"
-                  accept=".pdf,.doc,.docx,.txt"
-                  onChange={(e) => setFileToSend(e.target.files?.[0] || null)}
-                />
+                <div className="flex items-center space-x-2 mr-2">
+                  <label htmlFor="fileInputDocument" className="cursor-pointer hover:text-blue-500 transition-colors">
+                    <FaPaperclip className="text-gray-500" />
+                  </label>
+                  <input
+                    type="file"
+                    id="fileInputDocument"
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.txt"
+                    onChange={(e) => setFileToSend(e.target.files?.[0] || null)}
+                  />
 
-                <label htmlFor="fileInputImage" className="cursor-pointer">
-                  <FaImage className="text-gray-500 mr-4" />
-                </label>
-                <input
-                  type="file"
-                  id="fileInputImage"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={(e) => setFileToSend(e.target.files?.[0] || null)}
-                />
+                  <label htmlFor="fileInputImage" className="cursor-pointer hover:text-blue-500 transition-colors">
+                    <FaImage className="text-gray-500" />
+                  </label>
+                  <input
+                    type="file"
+                    id="fileInputImage"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => setFileToSend(e.target.files?.[0] || null)}
+                  />
+                </div>
 
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  className="flex-grow p-2 border border-gray-300 rounded-lg"
+                  className="flex-grow p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Type a message..."
                 />
 
-                <button type="button" className="ml-4 text-blue-500" onClick={handleVoiceRecord}>
-                  <FaMicrophone className={`text-2xl ${isRecording ? 'text-red-500' : 'text-gray-500'}`} />
-                </button>
+                <div className="flex items-center space-x-2 ml-2">
+                  <button
+                    type="button"
+                    className="text-gray-500 hover:text-blue-500 transition-colors"
+                    onClick={handleVoiceRecord}
+                  >
+                    <FaMicrophone className={`text-2xl ${isRecording ? 'text-red-500' : ''}`} />
+                  </button>
 
-                <button type="submit" className="ml-4 text-blue-500">
-                  <FaPaperPlane className="text-2xl" />
-                </button>
+                  <button type="submit" className="text-blue-500 hover:text-blue-600 transition-colors">
+                    <FaPaperPlane className="text-2xl" />
+                  </button>
+                </div>
               </form>
             )}
           </div>
