@@ -1,3 +1,5 @@
+'use client';
+
 // components/SplashScreen.tsx
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';  // Use this instead of 'next/router'
