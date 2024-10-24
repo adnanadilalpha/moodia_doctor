@@ -163,7 +163,7 @@ const Navbar = () => {
                           >
                             <p className="text-sm text-gray-800">{notification.message}</p>
                             <p className="text-xs text-gray-500">
-                              {notification.createdAt.toDate().toLocaleString()}
+                              {notification.createdAt ? notification.createdAt.toDate().toLocaleString() : "No date available"}
                             </p>
                           </div>
                         ))
