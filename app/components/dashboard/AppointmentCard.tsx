@@ -145,7 +145,7 @@ const AppointmentCard: React.FC = () => {
         );
         setCallStarted(true);
         localStorage.setItem('callStarted', 'true');
-        router.push(`/meeting?url=${encodeURIComponent(appointment.meetingUrl)}`);
+        router.push(`/meeting?url=${encodeURIComponent(appointment.meetingUrl)}&patientId=${appointment.patientId}`);
       } catch (error) {
         console.error("Error accessing media devices:", error);
         alert("Please allow access to camera and microphone to start the call.");
@@ -224,15 +224,7 @@ const AppointmentCard: React.FC = () => {
               <FaVideo />
               <span>Video Call</span>
             </button>
-          ) : (
-            <button
-              onClick={handleCompleteSession}
-              className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
-            >
-              <FaCheck />
-              <span>Complete</span>
-            </button>
-          )}
+          ) : null}
           <button
             onClick={() => router.push(`/chat?chatId=${appointment?.sessionId}`)}
             className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
@@ -241,23 +233,27 @@ const AppointmentCard: React.FC = () => {
             <span>Chat</span>
           </button>
         </div>
-        {!callStarted ? (
-          <button
-            onClick={handleCancelAppointment}
-            className="bg-red-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
-          >
-            <FaBan />
-            <span>Cancel</span>
-          </button>
-        ) : (
-          <button
-            onClick={handleCompleteSession}
-            className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
-          >
-            <FaCheck />
-            <span>Complete</span>
-          </button>
-        )}
+        
+        <div className="flex items-center space-x-2">
+          {callStarted ? (
+            <button
+              onClick={handleCompleteSession}
+              className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+              disabled={true}
+            >
+              <FaCheck />
+              <span>Complete</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleCancelAppointment}
+              className="bg-red-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+            >
+              <FaBan />
+              <span>Cancel</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

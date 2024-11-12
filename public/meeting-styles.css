@@ -1,0 +1,65 @@
+:root {
+  --blue-500: #3B82F6;
+  --red-500: #EF4444;
+}
+
+/* Main container */
+.app {
+  background-color: #F3F4F6 !important;
+}
+
+/* Video tiles */
+.tile-video {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+/* Participant name labels */
+.participant-name {
+  font-family: 'Inter', sans-serif !important;
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  padding: 4px 12px !important;
+  border-radius: 16px !important;
+}
+
+/* Chat interface */
+.chat-wrapper {
+  background-color: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Message bubbles */
+.message-bubble {
+  background-color: #F3F4F6 !important;
+  border-radius: 12px !important;
+  padding: 8px 16px !important;
+}
+
+/* Network quality indicator */
+.network-quality {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  border-radius: 16px !important;
+  padding: 4px 8px !important;
+}
+
+/* Remove default Daily.co buttons */
+.daily-video-toplevel .control-bar {
+  display: none !important;
+}
+
+/* Custom loading spinner */
+.loading-spinner {
+  border: 4px solid rgba(59, 130, 246, 0.1);
+  border-left-color: var(--blue-500);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+} 

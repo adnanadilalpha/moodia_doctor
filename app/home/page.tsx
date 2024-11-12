@@ -10,7 +10,7 @@ import PatientActivityCard from "../components/dashboard/PatientActivity";
 import ProgressCard from "../components/dashboard/ProgressCard";
 import CalendarCard from "../components/dashboard/CalendarCard";
 import { auth, db } from "../firebase";
-import { doc, getDoc, addDoc, collection, serverTimestamp, setDoc, getDocs } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, serverTimestamp, setDoc, getDocs, onSnapshot } from "firebase/firestore";
 import { FaUserMd, FaCalendarCheck, FaChartLine } from 'react-icons/fa';
 
 const createNotification = async (doctorId: string, message: string) => {
@@ -42,30 +42,38 @@ const HomePage: React.FC = () => {
   const router = useRouter();
 
   useEffect(() => {
-    const fetchUserName = async () => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setIsLoading(true);
       try {
-        const user = auth.currentUser;
         if (user) {
           const userDocRef = doc(db, 'doctors', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setUserName(userData?.fullName || 'Dr. Unknown');
-            setDoctor(userData);
-          } else {
-            setUserName('Dr. Unknown');
-          }
+          // Set up real-time listener
+          const unsubscribeDoc = onSnapshot(userDocRef, (docSnapshot) => {
+            if (docSnapshot.exists()) {
+              const userData = docSnapshot.data();
+              setUserName(userData?.fullName || 'Dr. Unknown');
+              setDoctor(userData);
+            } else {
+              setUserName('Dr. Unknown');
+            }
+            setIsLoading(false);
+          });
+
+          // Clean up doc listener when auth state changes
+          return () => unsubscribeDoc();
+        } else {
+          setUserName('Dr. Unknown');
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-      } finally {
         setIsLoading(false);
       }
-    };
+    });
 
-    fetchUserName();
-  }, []);
+    // Clean up auth listener on component unmount
+    return () => unsubscribe();
+  }, []); // Empty dependency array since we want this to run once on mount
 
   const [patientActivities] = useState([
     { id: 1, month: "July", activities: 30 },
@@ -85,7 +93,7 @@ const HomePage: React.FC = () => {
     }
     await createNotification(
       auth.currentUser.uid,
-      `Daily Summary for ${todayString}: You have X appointments today.`
+      `Daily Summary for ${todayString}: You have ${appointmentsToday} appointments today.`
     );
     await setDoc(dailySummaryRef, { lastSent: todayString }, { merge: true });
   };
