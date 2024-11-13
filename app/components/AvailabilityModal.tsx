@@ -4,6 +4,7 @@ import { getAuth } from 'firebase/auth';
 import { Switch } from '@headlessui/react';
 import { Button } from './ui/button';
 import { Dialog } from './ui/dialog';
+import Link from 'next/link';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -27,6 +28,7 @@ export const AvailabilityModal: React.FC<AvailabilityModalProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [timezone, setTimezone] = useState<string>('UTC');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [isLicenseVerified, setIsLicenseVerified] = useState<boolean>(false);
   const auth = getAuth();
   const firestore = getFirestore();
 
@@ -40,22 +42,59 @@ export const AvailabilityModal: React.FC<AvailabilityModalProps> = ({
 
       if (docSnap.exists()) {
         const doctorData = docSnap.data();
-        const savedAvailability = doctorData?.availability || [];
-        setAvailability(
-          daysOfWeek.map((day) => {
-            const existingSlot = savedAvailability.find((slot: TimeSlot) => slot.day === day);
-            return existingSlot
-              ? { ...existingSlot, enabled: true }
-              : { day, from: '09:00', to: '17:00', enabled: false };
-          })
-        );
-        setTimezone(doctorData?.timezone || 'UTC');
+        setIsLicenseVerified(doctorData?.licenseStatus === 'approved');
+
+        if (doctorData?.licenseStatus === 'approved') {
+          const savedAvailability = doctorData?.availability || [];
+          setAvailability(
+            daysOfWeek.map((day) => {
+              const existingSlot = savedAvailability.find((slot: TimeSlot) => slot.day === day);
+              return existingSlot
+                ? { ...existingSlot, enabled: true }
+                : { day, from: '09:00', to: '17:00', enabled: false };
+            })
+          );
+          setTimezone(doctorData?.timezone || 'UTC');
+        }
       }
       setLoading(false);
     };
 
     fetchDoctorData();
   }, [auth, firestore]);
+
+  if (loading) {
+    return (
+      <Dialog open onOpenChange={onClose}>
+        <div className="p-6">
+          <p>Loading...</p>
+        </div>
+      </Dialog>
+    );
+  }
+
+  if (!isLicenseVerified) {
+    return (
+      <Dialog open onOpenChange={onClose}>
+        <div className="p-6 max-w-2xl mx-auto">
+          <h2 className="text-2xl font-bold mb-4">Set Your Availability</h2>
+          <div className="bg-white rounded-lg">
+            <p className="text-red-600 mb-4">
+              Your license has not been verified yet. Please submit your license for verification from the profile section.
+            </p>
+            <div className="flex justify-between">
+              <Link href="/profile" className="text-blue-600 hover:underline">
+                Go to Profile
+              </Link>
+              <Button variant="outline" onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+    );
+  }
 
   const handleToggleDay = (day: string) => {
     setAvailability((prev) =>
@@ -125,16 +164,6 @@ export const AvailabilityModal: React.FC<AvailabilityModalProps> = ({
       console.error('Error updating availability:', error);
     }
   };
-
-  if (loading) {
-    return (
-      <Dialog open onOpenChange={onClose}>
-        <div className="p-6">
-          <p>Loading...</p>
-        </div>
-      </Dialog>
-    );
-  }
 
   return (
     <Dialog open onOpenChange={onClose}>

@@ -10,7 +10,7 @@ import {
   where,
   orderBy,
   limit,
-  getDocs,
+  onSnapshot,
   updateDoc,
   doc,
   getDoc,
@@ -46,92 +46,90 @@ const createNotification = async (doctorId: string, message: string) => {
 const AppointmentCard: React.FC = () => {
   const [appointment, setAppointment] = useState<AppointmentProps | null>(null);
   const [loading, setLoading] = useState(true);
-  const [callStarted, setCallStarted] = useState(false);
   const router = useRouter();
   const auth = getAuth();
 
   useEffect(() => {
-    // Check if call has started from local storage
-    const storedCallStarted = localStorage.getItem('callStarted') === 'true';
-    setCallStarted(storedCallStarted);
-
-    const fetchUpcomingAppointment = async (doctorId: string) => {
-      const q = query(
-        collection(db, "sessions"),
-        where("doctorId", "==", doctorId),
-        where("isUpcoming", "==", true),
-        where("isCompleted", "==", false),
-        orderBy("dateTime", "asc"),
-        limit(1)
-      );
-
-      try {
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const docSnapshot = querySnapshot.docs[0];
-          const data = docSnapshot.data();
-
-          // Handle string dateTime format
-          let date: Date | null = null;
-          if (typeof data.dateTime === "string") {
-            date = new Date(data.dateTime);
-          }
-
-          const patientId = data.userId;
-          let patientName = "Patient";
-          if (patientId) {
-            const userDocRef = doc(db, "users", patientId);
-            const userDocSnapshot = await getDoc(userDocRef);
-            if (userDocSnapshot.exists()) {
-              const userData = userDocSnapshot.data();
-              patientName = userData.username || userData.name || "Patient";
-            }
-          }
-
-          setAppointment({
-            username: patientName,
-            type: data.type === "Online" ? "Online" : "In-Person",
-            date: date
-              ? date.toLocaleDateString("en-GB", {
-                  year: "numeric",
-                  month: "short",
-                  day: "2-digit",
-                })
-              : "No Date",
-            time: date
-              ? date.toLocaleTimeString("en-GB", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                })
-              : "No Time",
-            videoCall: data.type === "Online",
-            sessionId: docSnapshot.id,
-            patientId: data.userId,
-            meetingUrl: data.meetingUrl || "",
-          });
-        } else {
-          setAppointment(null); // No upcoming appointments
-        }
-      } catch (error) {
-        console.error("Error fetching appointment:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        fetchUpcomingAppointment(user.uid);
+        const fetchUpcomingAppointment = () => {
+          const q = query(
+            collection(db, "sessions"),
+            where("doctorId", "==", user.uid),
+            where("isUpcoming", "==", true),
+            where("isCompleted", "==", false),
+            orderBy("dateTime", "asc"),
+            limit(1)
+          );
+
+          const unsubscribeSnapshot = onSnapshot(q, async (querySnapshot) => {
+            if (!querySnapshot.empty) {
+              const docSnapshot = querySnapshot.docs[0];
+              const data = docSnapshot.data();
+
+              let date: Date | null = null;
+              if (typeof data.dateTime === "string") {
+                date = new Date(data.dateTime);
+              } else if (data.dateTime?.toDate) {
+                date = data.dateTime.toDate();
+              }
+
+              const patientId = data.userId;
+              let patientName = "Patient";
+              if (patientId) {
+                const userDocRef = doc(db, "users", patientId);
+                const userDocSnapshot = await getDoc(userDocRef);
+                if (userDocSnapshot.exists()) {
+                  const userData = userDocSnapshot.data();
+                  patientName = userData.username || userData.name || "Patient";
+                }
+              }
+
+              setAppointment({
+                username: patientName,
+                type: data.type === "Online" ? "Online" : "In-Person",
+                date: date
+                  ? date.toLocaleDateString("en-GB", {
+                      year: "numeric",
+                      month: "short",
+                      day: "2-digit",
+                    })
+                  : "No Date",
+                time: date
+                  ? date.toLocaleTimeString("en-GB", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })
+                  : "No Time",
+                videoCall: data.type === "Online",
+                sessionId: docSnapshot.id,
+                patientId: data.userId,
+                meetingUrl: data.meetingUrl || "",
+              });
+            } else {
+              setAppointment(null);
+            }
+            setLoading(false);
+          }, (error) => {
+            console.error("Error fetching appointment:", error);
+            setLoading(false);
+          });
+
+          return unsubscribeSnapshot;
+        };
+
+        const unsubscribeSnapshot = fetchUpcomingAppointment();
+        return () => {
+          unsubscribeSnapshot();
+        };
       } else {
         setLoading(false);
       }
     });
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      unsubscribeAuth();
     };
   }, [auth]);
 
@@ -143,8 +141,6 @@ const AppointmentCard: React.FC = () => {
           auth.currentUser?.uid || "",
           `Video call started with ${appointment.username}`
         );
-        setCallStarted(true);
-        localStorage.setItem('callStarted', 'true');
         router.push(`/meeting?url=${encodeURIComponent(appointment.meetingUrl)}&patientId=${appointment.patientId}`);
       } catch (error) {
         console.error("Error accessing media devices:", error);
@@ -159,14 +155,15 @@ const AppointmentCard: React.FC = () => {
     if (appointment) {
       try {
         const sessionRef = doc(db, "sessions", appointment.sessionId);
-        await updateDoc(sessionRef, { isCompleted: true, isUpcoming: false });
+        await updateDoc(sessionRef, { 
+          isCompleted: true, 
+          isUpcoming: false,
+          status: 'completed'
+        });
         await createNotification(
           auth.currentUser?.uid || "",
           `Session completed with ${appointment.username}`
         );
-        setAppointment(null);
-        setCallStarted(false);
-        localStorage.removeItem('callStarted');
       } catch (error) {
         console.error("Error marking session as complete:", error);
       }
@@ -177,12 +174,15 @@ const AppointmentCard: React.FC = () => {
     if (appointment) {
       try {
         const sessionRef = doc(db, "sessions", appointment.sessionId);
-        await updateDoc(sessionRef, { isUpcoming: false, isCompleted: false, status: "Cancelled" });
+        await updateDoc(sessionRef, { 
+          isUpcoming: false, 
+          isCompleted: false,
+          status: "Cancelled" 
+        });
         await createNotification(
           auth.currentUser?.uid || "",
           `Appointment with ${appointment.username} has been cancelled`
         );
-        setAppointment(null);
       } catch (error) {
         console.error("Error cancelling appointment:", error);
       }
@@ -216,7 +216,7 @@ const AppointmentCard: React.FC = () => {
       </div>
       <div className="flex items-center justify-between mt-4 space-x-4">
         <div className="flex items-center space-x-2">
-          {appointment?.videoCall && !callStarted ? (
+          {appointment?.videoCall && (
             <button
               onClick={handleStartCall}
               className="bg-green-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
@@ -224,7 +224,7 @@ const AppointmentCard: React.FC = () => {
               <FaVideo />
               <span>Video Call</span>
             </button>
-          ) : null}
+          )}
           <button
             onClick={() => router.push(`/chat?chatId=${appointment?.sessionId}`)}
             className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
@@ -235,24 +235,20 @@ const AppointmentCard: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-2">
-          {callStarted ? (
-            <button
-              onClick={handleCompleteSession}
-              className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
-              disabled={true}
-            >
-              <FaCheck />
-              <span>Complete</span>
-            </button>
-          ) : (
-            <button
-              onClick={handleCancelAppointment}
-              className="bg-red-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
-            >
-              <FaBan />
-              <span>Cancel</span>
-            </button>
-          )}
+          <button
+            onClick={handleCompleteSession}
+            className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+          >
+            <FaCheck />
+            <span>Complete</span>
+          </button>
+          <button
+            onClick={handleCancelAppointment}
+            className="bg-red-500 text-white py-2 px-4 rounded-lg flex items-center space-x-2"
+          >
+            <FaBan />
+            <span>Cancel</span>
+          </button>
         </div>
       </div>
     </div>
