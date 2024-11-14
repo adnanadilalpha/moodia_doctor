@@ -2,8 +2,12 @@ export interface Notification {
   id: string;
   doctorId: string;
   message: string;
-  chatId: string;
   createdAt: Date;
   read: boolean;
-  // Add any other properties that your notifications have
+  type: 'message' | 'session' | 'update' | 'daily_summary';
+  priority?: 'low' | 'medium' | 'high';
+  relatedId?: string; // ID of related item (e.g., messageId, sessionId)
+  metadata?: {
+    [key: string]: any;
+  };
 }

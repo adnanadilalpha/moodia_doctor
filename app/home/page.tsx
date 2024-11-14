@@ -10,17 +10,40 @@ import PatientActivityCard from "../components/dashboard/PatientActivity";
 import ProgressCard from "../components/dashboard/ProgressCard";
 import CalendarCard from "../components/dashboard/CalendarCard";
 import { auth, db } from "../firebase";
-import { doc, getDoc, addDoc, collection, serverTimestamp, setDoc, getDocs, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, serverTimestamp, setDoc, getDocs, onSnapshot, query, where, updateDoc } from "firebase/firestore";
 import { FaUserMd, FaCalendarCheck, FaChartLine } from 'react-icons/fa';
 
-const createNotification = async (doctorId: string, message: string) => {
+const createNotification = async (
+  doctorId: string,
+  message: string,
+  type: 'message' | 'session' | 'update' | 'daily_summary',
+  options?: {
+    priority?: 'low' | 'medium' | 'high';
+    relatedId?: string;
+    metadata?: { [key: string]: any };
+  }
+) => {
   try {
-    await addDoc(collection(db, 'notifications'), {
-      doctorId,
-      message,
-      createdAt: serverTimestamp(),
-      read: false
-    });
+    // Check doctor's notification preferences
+    const doctorRef = doc(db, 'doctors', doctorId);
+    const doctorDoc = await getDoc(doctorRef);
+    const notificationPrefs = doctorDoc.data()?.notificationPreferences || {};
+
+    // Only create notification if the doctor hasn't disabled this type
+    if (notificationPrefs[type] !== false) {
+      const notification = {
+        doctorId,
+        message,
+        type,
+        createdAt: serverTimestamp(),
+        read: false,
+        priority: options?.priority || 'low',
+        relatedId: options?.relatedId,
+        metadata: options?.metadata || {}
+      };
+
+      await addDoc(collection(db, 'notifications'), notification);
+    }
   } catch (error) {
     console.error('Error creating notification:', error);
   }
@@ -28,7 +51,12 @@ const createNotification = async (doctorId: string, message: string) => {
 
 const createUrgentNotification = async (message: string) => {
   if (!auth.currentUser) return;
-  await createNotification(auth.currentUser.uid, `URGENT: ${message}`);
+  await createNotification(
+    auth.currentUser.uid,
+    `URGENT: ${message}`,
+    'update',
+    { priority: 'high' }
+  );
 };
 
 const HomePage: React.FC = () => {
@@ -83,23 +111,98 @@ const HomePage: React.FC = () => {
 
   const createDailySummaryNotification = async () => {
     if (!auth.currentUser) return;
+    
     const today = new Date();
     const todayString = today.toISOString().split('T')[0];
+    
+    // Check if summary was already sent today
     const dailySummaryRef = doc(db, 'dailySummaries', auth.currentUser.uid);
     const dailySummaryDoc = await getDoc(dailySummaryRef);
     if (dailySummaryDoc.exists() && dailySummaryDoc.data().lastSent === todayString) {
       console.log('Daily summary already sent today');
       return;
     }
-    await createNotification(
-      auth.currentUser.uid,
-      `Daily Summary for ${todayString}: You have ${appointmentsToday} appointments today.`
-    );
-    await setDoc(dailySummaryRef, { lastSent: todayString }, { merge: true });
+
+    try {
+      // Get today's appointments
+      const sessionsRef = collection(db, 'sessions');
+      const sessionsQuery = query(
+        sessionsRef,
+        where('doctorId', '==', auth.currentUser.uid),
+        where('date', '==', todayString)
+      );
+      const sessionsSnapshot = await getDocs(sessionsQuery);
+      const appointmentsToday = sessionsSnapshot.docs.length;
+
+      // Get unread messages
+      const chatsRef = collection(db, 'chats');
+      const chatsQuery = query(
+        chatsRef,
+        where('doctorId', '==', auth.currentUser.uid),
+        where('unreadMessages', '>', 0)
+      );
+      const chatsSnapshot = await getDocs(chatsQuery);
+      const unreadMessages = chatsSnapshot.docs.reduce(
+        (total, doc) => total + (doc.data().unreadMessages || 0),
+        0
+      );
+
+      // Only create notification if there's something to report
+      if (appointmentsToday > 0 || unreadMessages > 0) {
+        let summaryMessage = 'Daily Summary: ';
+        const summaryParts = [];
+
+        if (appointmentsToday > 0) {
+          summaryParts.push(`${appointmentsToday} appointment${appointmentsToday > 1 ? 's' : ''} today`);
+        }
+        
+        if (unreadMessages > 0) {
+          summaryParts.push(`${unreadMessages} unread message${unreadMessages > 1 ? 's' : ''}`);
+        }
+
+        summaryMessage += summaryParts.join(' and ');
+
+        await createNotification(
+          auth.currentUser.uid,
+          summaryMessage,
+          'daily_summary',
+          {
+            priority: 'medium',
+            metadata: {
+              appointmentsToday,
+              unreadMessages,
+              date: todayString
+            }
+          }
+        );
+      }
+
+      // Update last sent date regardless of whether we sent a notification
+      await setDoc(dailySummaryRef, { lastSent: todayString }, { merge: true });
+      
+    } catch (error) {
+      console.error('Error creating daily summary:', error);
+    }
   };
 
+  // Update the useEffect to run the summary at a specific time
   useEffect(() => {
-    createDailySummaryNotification();
+    const checkAndCreateDailySummary = async () => {
+      const now = new Date();
+      const hour = now.getHours();
+      
+      // Only create summary during morning hours (e.g., between 7 AM and 9 AM)
+      if (hour >= 7 && hour <= 9) {
+        await createDailySummaryNotification();
+      }
+    };
+
+    checkAndCreateDailySummary();
+
+    // Set up interval to check every hour
+    const interval = setInterval(checkAndCreateDailySummary, 3600000); // 1 hour in milliseconds
+
+    return () => clearInterval(interval);
   }, []);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -155,6 +258,84 @@ const HomePage: React.FC = () => {
 
     fetchSessionData();
   }, []);
+
+  const setupAppointmentNotifications = () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.log('No authenticated user found');
+      return;
+    }
+
+    // Create a query for sessions with the current doctor's ID
+    const sessionsRef = collection(db, 'sessions');
+    const q = query(
+      sessionsRef,
+      where('doctorId', '==', currentUser.uid),
+      where('notificationSent', '!=', true) // Add this field to track if notification was sent
+    );
+
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        if (change.type === 'added') {
+          const sessionData = change.doc.data();
+          
+          try {
+            // Fetch patient details
+            const patientRef = doc(db, 'users', sessionData.patientId);
+            const patientDoc = await getDoc(patientRef);
+            const patientData = patientDoc.data();
+            const patientName = patientData?.username || 'Patient';
+
+            // Format date and time
+            const sessionDate = new Date(sessionData.dateTime.seconds * 1000);
+            const formattedDate = sessionDate.toLocaleDateString();
+            const formattedTime = sessionDate.toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            });
+
+            // Create notification with patient's name and session details
+            await createNotification(
+              currentUser.uid,  // Use the stored currentUser reference
+              `New appointment scheduled with ${patientName} for ${formattedDate} at ${formattedTime}`,
+              'session',
+              {
+                priority: 'high',
+                relatedId: change.doc.id,
+                metadata: {
+                  patientId: sessionData.patientId,
+                  patientName,
+                  sessionDate: sessionDate.toISOString(),
+                  sessionType: sessionData.type
+                }
+              }
+            );
+
+            // Mark notification as sent
+            await updateDoc(doc(sessionsRef, change.doc.id), {
+              notificationSent: true
+            });
+          } catch (error) {
+            console.error('Error processing new appointment notification:', error);
+          }
+        }
+      });
+    });
+
+    // Return unsubscribe function
+    return unsubscribe;
+  };
+
+  // Add a new useEffect to handle appointment notifications
+  useEffect(() => {
+    const unsubscribe = setupAppointmentNotifications();
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []); // Empty dependency array since we only want to set up the listener once
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;

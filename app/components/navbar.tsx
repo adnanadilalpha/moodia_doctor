@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { auth, db } from "../firebase";
-import { doc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, writeBatch } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, writeBatch, onSnapshot } from "firebase/firestore";
 import {
   FaBars,
   FaCalendarAlt,
@@ -19,6 +19,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Timestamp } from 'firebase/firestore';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { useDocument } from 'react-firebase-hooks/firestore';
+import { formatDistanceToNow } from 'date-fns';
 
 interface Notification {
   id: string;
@@ -26,6 +27,12 @@ interface Notification {
   message: string;
   createdAt: Timestamp;
   read: boolean;
+  type: 'message' | 'session' | 'update' | 'daily_summary';
+  priority?: 'low' | 'medium' | 'high';
+  relatedId?: string; // ID of related item (e.g., messageId, sessionId)
+  metadata?: {
+    [key: string]: any;
+  };
 }
 
 const Navbar = () => {
@@ -33,6 +40,7 @@ const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -45,30 +53,45 @@ const Navbar = () => {
   const profilePicture = userDoc?.data()?.photoURL || null;
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      if (!user) return;
+    if (!user) {
+      setNotifications([]);
+      setNotificationsLoading(false);
+      return;
+    }
 
-      const notificationsRef = collection(db, 'notifications');
-      const q = query(
-        notificationsRef,
-        where('doctorId', '==', user.uid),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
+    const notificationsRef = collection(db, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('doctorId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
 
-      try {
-        const querySnapshot = await getDocs(q);
-        const fetchedNotifications = querySnapshot.docs.map(doc => ({
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const newNotifications = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         } as Notification));
-        setNotifications(fetchedNotifications);
-      } catch (error) {
-        console.error("Error fetching notifications:", error);
-      }
-    };
+        
+        setNotifications(newNotifications);
+        setNotificationsLoading(false);
 
-    fetchNotifications();
+        // Play sound for new notifications
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added' && !change.doc.data().read) {
+            playNotificationSound();
+          }
+        });
+      },
+      (error) => {
+        console.error("Error fetching notifications:", error);
+        setNotificationsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, [user]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -97,9 +120,45 @@ const Navbar = () => {
     ));
   };
 
+  const markAllAsRead = async () => {
+    if (!user) return;
+    
+    const batch = writeBatch(db);
+    notifications.forEach((notification) => {
+      if (!notification.read) {
+        const notificationRef = doc(db, 'notifications', notification.id);
+        batch.update(notificationRef, { read: true });
+      }
+    });
+    
+    await batch.commit();
+    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  };
+
   const handleNotificationClick = async (notification: Notification) => {
     await markAsRead(notification.id);
-    // Add any navigation logic here if needed
+    
+    // Handle navigation based on notification type
+    switch (notification.type) {
+      case 'session':
+        if (notification.metadata?.sessionId) {
+          router.push(`/appointment?sessionId=${notification.metadata.sessionId}`);
+        } else {
+          router.push('/appointment');
+        }
+        break;
+      case 'message':
+        if (notification.metadata?.chatId) {
+          router.push(`/chat/${notification.metadata.chatId}`);
+        }
+        break;
+      case 'daily_summary':
+        router.push('/home');
+        break;
+      default:
+        break;
+    }
+    
     setShowNotifications(false);
   };
 
@@ -114,6 +173,92 @@ const Navbar = () => {
     setNotifications([]);
   };
 
+  const playNotificationSound = () => {
+    const audio = new Audio('/notification-sound.mp3'); // Add this sound file to your public folder
+    audio.play().catch(error => console.log('Error playing notification sound:', error));
+  };
+
+  const renderNotificationContent = (notification: Notification) => {
+    const timeAgo = notification.createdAt ? 
+      formatDistanceToNow(new Date(notification.createdAt.seconds * 1000), { addSuffix: true }) : 
+      'recently';
+
+    return (
+      <div
+        key={notification.id}
+        className={`px-4 py-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 ${
+          !notification.read ? 'bg-blue-50' : ''
+        }`}
+        onClick={() => handleNotificationClick(notification)}
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <p className={`text-sm ${!notification.read ? 'font-semibold' : ''}`}>
+              {notification.message}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">{timeAgo}</p>
+          </div>
+          {notification.priority === 'high' && (
+            <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+              Urgent
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderNotificationsDropdown = () => (
+    <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg overflow-hidden z-20">
+      <div className="py-2">
+        <div className="flex justify-between items-center px-4 py-2 border-b">
+          <h3 className="font-semibold">Notifications</h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => markAllAsRead()}
+              className="text-sm text-blue-500 hover:text-blue-700"
+            >
+              Mark all read
+            </button>
+            <button
+              onClick={clearAllNotifications}
+              className="text-sm text-red-500 hover:text-red-700"
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
+        
+        {notificationsLoading ? (
+          <div className="p-4 text-center text-gray-500">Loading notifications...</div>
+        ) : notifications.length === 0 ? (
+          <div className="p-4 text-center text-gray-500">No notifications</div>
+        ) : (
+          <div className="max-h-96 overflow-y-auto">
+            {notifications.map(notification => renderNotificationContent(notification))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderNotificationBell = () => (
+    <div className="relative">
+      <button
+        onClick={toggleNotifications}
+        className="relative p-2 text-green-500 hover:text-green-700 focus:outline-none"
+      >
+        <FaBell className="w-6 h-6" />
+        {unreadCount > 0 && (
+          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+      {showNotifications && renderNotificationsDropdown()}
+    </div>
+  );
+
   return (
     <nav className="bg-white shadow-lg">
       <div className="px-4 md:px-12">
@@ -125,53 +270,7 @@ const Navbar = () => {
             </Link>
             <div className="hidden md:flex items-center space-x-4">
               {/* Notifications Icon */}
-              <div className="relative items-center">
-                <button
-                  onClick={toggleNotifications}
-                  className="text-green-500 hover:text-green-600 focus:outline-none flex items-center"
-                >
-                  <FaBell className="w-6 h-6" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-                {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg overflow-hidden z-20">
-                    <div className="py-2">
-                      <div className="flex justify-between items-center px-4 py-2 border-b">
-                        <h3 className="font-semibold">Notifications</h3>
-                        <button
-                          onClick={clearAllNotifications}
-                          className="text-sm text-red-500 hover:text-red-700"
-                        >
-                          <FaTrash className="inline mr-1" />
-                          Clear All
-                        </button>
-                      </div>
-                      {notifications.length === 0 ? (
-                        <p className="text-center text-gray-500 py-4">No notifications</p>
-                      ) : (
-                        notifications.map((notification) => (
-                          <div
-                            key={notification.id}
-                            className={`px-4 py-2 hover:bg-gray-100 cursor-pointer ${
-                              !notification.read ? 'bg-blue-50' : ''
-                            }`}
-                            onClick={() => handleNotificationClick(notification)}
-                          >
-                            <p className="text-sm text-gray-800">{notification.message}</p>
-                            <p className="text-xs text-gray-500">
-                              {notification.createdAt ? notification.createdAt.toDate().toLocaleString() : "No date available"}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              {renderNotificationBell()}
 
               <Link
                 href="/profile"

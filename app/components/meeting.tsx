@@ -4,9 +4,45 @@ import { useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from '../firebase';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, addDoc, collection, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { FaPhoneSlash } from 'react-icons/fa';
+
+const createNotification = async (
+  doctorId: string,
+  message: string,
+  type: 'message' | 'session' | 'update' | 'daily_summary',
+  options?: {
+    priority?: 'low' | 'medium' | 'high';
+    relatedId?: string;
+    metadata?: { [key: string]: any };
+  }
+) => {
+  try {
+    // Check doctor's notification preferences
+    const doctorRef = doc(db, 'doctors', doctorId);
+    const doctorDoc = await getDoc(doctorRef);
+    const notificationPrefs = doctorDoc.data()?.notificationPreferences || {};
+
+    // Only create notification if the doctor hasn't disabled this type
+    if (notificationPrefs[type] !== false) {
+      const notification = {
+        doctorId,
+        message,
+        type,
+        createdAt: serverTimestamp(),
+        read: false,
+        priority: options?.priority || 'low',
+        relatedId: options?.relatedId,
+        metadata: options?.metadata || {}
+      };
+
+      await addDoc(collection(db, 'notifications'), notification);
+    }
+  } catch (error) {
+    console.error('Error creating notification:', error);
+  }
+};
 
 const DoctorMeeting: React.FC = () => {
   const router = useRouter();
@@ -75,9 +111,36 @@ const DoctorMeeting: React.FC = () => {
     }
   };
 
-  const handleEndMeeting = () => {
+  const handleEndMeeting = async () => {
     if (window.confirm('Are you sure you want to end the meeting?')) {
-      router.back();
+      try {
+        // Save meeting end time
+        await setDoc(doc(db, 'meetingNotes', meetingId), {
+          endedAt: serverTimestamp()
+        }, { merge: true });
+
+        // Create notification
+        if (user?.uid) {
+          await createNotification(
+            user.uid,
+            `Meeting with ${patientName} ended`,
+            'session',
+            {
+              priority: 'medium',
+              relatedId: meetingId,
+              metadata: {
+                patientId,
+                endTime: new Date().toISOString()
+              }
+            }
+          );
+        }
+
+        router.back();
+      } catch (error) {
+        console.error('Error ending meeting:', error);
+        alert('Error ending meeting. Please try again.');
+      }
     }
   };
 

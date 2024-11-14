@@ -1,127 +1,290 @@
 import React, { useState, useEffect } from 'react';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { Switch } from '@headlessui/react';
+import { toast } from 'react-hot-toast';
 
 interface NotificationPreferences {
   email: boolean;
   sms: boolean;
   app: boolean;
+  sound: boolean;
+  types: {
+    message: boolean;
+    session: boolean;
+    update: boolean;
+    daily_summary: boolean;
+  };
+  schedule: {
+    start: string;
+    end: string;
+    enabled: boolean;
+  };
 }
 
-const NotificationSettings: React.FC = () => {
-  const [notifications, setNotifications] = useState<NotificationPreferences>({
-    email: true,
-    sms: false,
-    app: true,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+const defaultPreferences: NotificationPreferences = {
+  email: true,
+  sms: false,
+  app: true,
+  sound: true,
+  types: {
+    message: true,
+    session: true,
+    update: true,
+    daily_summary: true
+  },
+  schedule: {
+    start: '09:00',
+    end: '18:00',
+    enabled: true
+  }
+};
 
+const NotificationSettings: React.FC = () => {
+  const [preferences, setPreferences] = useState<NotificationPreferences>(defaultPreferences);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const auth = getAuth();
 
   useEffect(() => {
-    const fetchNotificationPreferences = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const docRef = doc(db, 'doctors', user.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists() && docSnap.data().notificationPreferences) {
-            setNotifications(docSnap.data().notificationPreferences);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching notification preferences:', err);
-        setError('Failed to load notification preferences. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchNotificationPreferences();
-  }, [auth]);
+  }, []);
 
-  const handleToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNotifications(prev => ({ ...prev, [e.target.name]: e.target.checked }));
-  };
-
-  const handleSaveNotifications = async () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
+  const fetchNotificationPreferences = async () => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        const docRef = doc(db, 'doctors', user.uid);
-        await setDoc(docRef, { notificationPreferences: notifications }, { merge: true });
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
+      if (!user) {
+        toast.error('Please login to manage notification settings');
+        return;
       }
-    } catch (err) {
-      console.error('Error saving notification preferences:', err);
-      setError('Failed to save notification preferences. Please try again.');
+
+      const docRef = doc(db, 'doctors', user.uid);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists() && docSnap.data().notificationPreferences) {
+        setPreferences({
+          ...defaultPreferences,
+          ...docSnap.data().notificationPreferences
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching preferences:', error);
+      toast.error('Failed to load notification preferences');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleToggle = (key: keyof NotificationPreferences | string, value: boolean) => {
+    setPreferences(prev => {
+      if (key.includes('.')) {
+        const [section, subKey] = key.split('.');
+        return {
+          ...prev,
+          [section]: {
+            ...prev[section as keyof NotificationPreferences],
+            [subKey]: value
+          }
+        };
+      }
+      return { ...prev, [key]: value };
+    });
+  };
+
+  const handleTimeChange = (type: 'start' | 'end', value: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [type]: value
+      }
+    }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        toast.error('Please login to save settings');
+        return;
+      }
+
+      const docRef = doc(db, 'doctors', user.uid);
+      await setDoc(docRef, { 
+        notificationPreferences: preferences 
+      }, { merge: true });
+
+      // Test notification sound if enabled
+      if (preferences.sound) {
+        playTestSound();
+      }
+
+      toast.success('Settings saved successfully');
+    } catch (error) {
+      console.error('Error saving preferences:', error);
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const playTestSound = () => {
+    const audio = new Audio('/notification-sound.mp3');
+    audio.volume = 0.5; // Set volume to 50%
+    audio.play().catch(error => {
+      console.error('Error playing test sound:', error);
+      toast.error('Failed to play test sound');
+    });
+  };
+
   if (loading) {
-    return <div>Loading notification preferences...</div>;
+    return (
+      <div className="flex justify-center items-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold mb-4">Notification Settings</h2>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
-      {success && <p className="text-green-500 mb-4">Notification preferences saved successfully!</p>}
-      <div className="space-y-4">
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="email"
-            name="email"
-            checked={notifications.email}
-            onChange={handleToggle}
-            className="mr-2"
+    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
+      <h2 className="text-2xl font-bold mb-6">Notification Preferences</h2>
+
+      {/* Delivery Methods */}
+      <section className="mb-8">
+        <h3 className="text-lg font-semibold mb-4">Delivery Methods</h3>
+        <div className="space-y-4">
+          <SwitchItem
+            label="In-App Notifications"
+            enabled={preferences.app}
+            onChange={(value) => handleToggle('app', value)}
           />
-          <label htmlFor="email">Email Notifications</label>
-        </div>
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="sms"
-            name="sms"
-            checked={notifications.sms}
-            onChange={handleToggle}
-            className="mr-2"
+          <SwitchItem
+            label="Email Notifications"
+            enabled={preferences.email}
+            onChange={(value) => handleToggle('email', value)}
           />
-          <label htmlFor="sms">SMS Notifications</label>
-        </div>
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="app"
-            name="app"
-            checked={notifications.app}
-            onChange={handleToggle}
-            className="mr-2"
+          <SwitchItem
+            label="SMS Notifications"
+            enabled={preferences.sms}
+            onChange={(value) => handleToggle('sms', value)}
           />
-          <label htmlFor="app">In-App Notifications</label>
+          <SwitchItem
+            label="Notification Sound"
+            enabled={preferences.sound}
+            onChange={(value) => handleToggle('sound', value)}
+          >
+            {preferences.sound && (
+              <button
+                onClick={playTestSound}
+                className="ml-4 text-sm text-blue-500 hover:text-blue-700"
+              >
+                Test Sound
+              </button>
+            )}
+          </SwitchItem>
         </div>
-      </div>
+      </section>
+
+      {/* Notification Types */}
+      <section className="mb-8">
+        <h3 className="text-lg font-semibold mb-4">Notification Types</h3>
+        <div className="space-y-4">
+          <SwitchItem
+            label="Messages"
+            enabled={preferences.types.message}
+            onChange={(value) => handleToggle('types.message', value)}
+          />
+          <SwitchItem
+            label="Appointments"
+            enabled={preferences.types.session}
+            onChange={(value) => handleToggle('types.session', value)}
+          />
+          <SwitchItem
+            label="Updates"
+            enabled={preferences.types.update}
+            onChange={(value) => handleToggle('types.update', value)}
+          />
+          <SwitchItem
+            label="Daily Summary"
+            enabled={preferences.types.daily_summary}
+            onChange={(value) => handleToggle('types.daily_summary', value)}
+          />
+        </div>
+      </section>
+
+      {/* Quiet Hours */}
+      <section className="mb-8">
+        <h3 className="text-lg font-semibold mb-4">Quiet Hours</h3>
+        <div className="space-y-4">
+          <SwitchItem
+            label="Enable Quiet Hours"
+            enabled={preferences.schedule.enabled}
+            onChange={(value) => handleToggle('schedule.enabled', value)}
+          />
+          {preferences.schedule.enabled && (
+            <div className="ml-8 space-y-4">
+              <div className="flex items-center space-x-4">
+                <label className="text-sm">Start Time:</label>
+                <input
+                  type="time"
+                  value={preferences.schedule.start}
+                  onChange={(e) => handleTimeChange('start', e.target.value)}
+                  className="border rounded px-2 py-1"
+                />
+              </div>
+              <div className="flex items-center space-x-4">
+                <label className="text-sm">End Time:</label>
+                <input
+                  type="time"
+                  value={preferences.schedule.end}
+                  onChange={(e) => handleTimeChange('end', e.target.value)}
+                  className="border rounded px-2 py-1"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
       <button
-        onClick={handleSaveNotifications}
-        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
-        disabled={loading}
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
       >
-        Save Preferences
+        {saving ? 'Saving...' : 'Save Preferences'}
       </button>
     </div>
   );
 };
+
+// Helper component for switches
+const SwitchItem: React.FC<{
+  label: string;
+  enabled: boolean;
+  onChange: (value: boolean) => void;
+  children?: React.ReactNode;
+}> = ({ label, enabled, onChange, children }) => (
+  <div className="flex items-center justify-between">
+    <div className="flex items-center">
+      <Switch
+        checked={enabled}
+        onChange={onChange}
+        className={`${
+          enabled ? 'bg-blue-500' : 'bg-gray-300'
+        } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+      >
+        <span
+          className={`${
+            enabled ? 'translate-x-6' : 'translate-x-1'
+          } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+        />
+      </Switch>
+      <span className="ml-3 text-sm">{label}</span>
+    </div>
+    {children}
+  </div>
+);
 
 export default NotificationSettings;
