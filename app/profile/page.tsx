@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, updateDoc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import Sidebar from '../components/sidebar';
 import Navbar from '../components/navbar';
 import Select from 'react-select';
 import { getNames } from 'country-list';
 import ISO6391 from 'iso-639-1';
+import { FaCamera, FaTrash } from 'react-icons/fa';
 
 import LicenseUploadModal from './LicenseUploadModal';
 import { db } from '../firebase';
@@ -60,12 +62,14 @@ const Profile: React.FC = () => {
   const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState(false);
   const [errorMessage, setErrorMessage] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   
   const countryOptions = getNames().map((name: string) => ({ value: name, label: name }));
   const languageOptions = ISO6391.getAllCodes().map(code => ({ value: code, label: ISO6391.getName(code) }));
 
   const auth = getAuth();
   const firestore = getFirestore();
+  const storage = getStorage();
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -169,6 +173,68 @@ const Profile: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setUploadingPhoto(true);
+      
+      // Delete old photo if exists
+      if (photoURL && photoURL.includes('firebasestorage')) {
+        const oldPhotoRef = ref(storage, photoURL);
+        await deleteObject(oldPhotoRef).catch(err => console.log('No old photo to delete'));
+      }
+
+      const storageRef = ref(storage, `profile-pictures/${user.uid}/${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Update Firestore
+      const doctorRef = doc(firestore, 'doctors', user.uid);
+      await updateDoc(doctorRef, {
+        photoURL: downloadURL
+      });
+
+      setPhotoURL(downloadURL);
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      setErrorMessage(true);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleDeleteProfilePicture = async () => {
+    const user = auth.currentUser;
+    if (!user || !photoURL) return;
+
+    try {
+      setUploadingPhoto(true);
+
+      if (photoURL.includes('firebasestorage')) {
+        const photoRef = ref(storage, photoURL);
+        await deleteObject(photoRef);
+      }
+
+      // Update Firestore
+      const doctorRef = doc(firestore, 'doctors', user.uid);
+      await updateDoc(doctorRef, {
+        photoURL: null
+      });
+
+      setPhotoURL(undefined);
+    } catch (error) {
+      console.error('Error deleting profile picture:', error);
+      setErrorMessage(true);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -183,21 +249,47 @@ const Profile: React.FC = () => {
             <div className="md:flex">
               <div className="md:w-1/3 bg-blue-600 p-8 text-white">
                 <div className="text-center">
-                  <div className="w-40 h-40 mx-auto mb-4">
-                    <img
-                      src={photoURL || `https://via.placeholder.com/160?text=${formData.fullName.charAt(0) || 'D'}`}
-                      alt="Profile"
-                      className="w-full h-full rounded-full object-cover border-4 border-white"
-                    />
+                  <div className="text-center relative">
+                    <div className="w-40 h-40 mx-auto mb-4 relative group">
+                      <img
+                        src={photoURL || `https://via.placeholder.com/160?text=${formData.fullName.charAt(0) || 'D'}`}
+                        alt="Profile"
+                        className="w-full h-full rounded-full object-cover border-4 border-white"
+                      />
+                      <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                        <label className="cursor-pointer p-2 hover:text-blue-300">
+                          <FaCamera size={24} />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleProfilePictureUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        {photoURL && (
+                          <button
+                            onClick={handleDeleteProfilePicture}
+                            className="p-2 hover:text-red-300"
+                          >
+                            <FaTrash size={24} />
+                          </button>
+                        )}
+                      </div>
+                      {uploadingPhoto && (
+                        <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                        </div>
+                      )}
+                    </div>
+                    <h2 className="text-2xl font-bold mb-2">{formData.fullName}</h2>
+                    <p className="text-blue-200 mb-4">{formData.specialization}</p>
                   </div>
-                  <h2 className="text-2xl font-bold mb-2">{formData.fullName}</h2>
-                  <p className="text-blue-200 mb-4">{formData.specialization}</p>
-                </div>
-                <div className="mt-8">
-                  <h3 className="text-xl font-semibold mb-2">License Status</h3>
-                  <p className={`text-lg ${licenseStatus === 'approved' ? 'text-green-300' : 'text-yellow-300'}`}>
-                    {licenseStatus || 'Pending'}
-                  </p>
+                  <div className="mt-8">
+                    <h3 className="text-xl font-semibold mb-2">License Status</h3>
+                    <p className={`text-lg ${licenseStatus === 'approved' ? 'text-green-300' : 'text-yellow-300'}`}>
+                      {licenseStatus || 'Pending'}
+                    </p>
+                  </div>
                 </div>
               </div>
               <div className="md:w-2/3 p-8">
