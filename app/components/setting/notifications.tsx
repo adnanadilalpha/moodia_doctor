@@ -9,7 +9,17 @@ interface NotificationPreferences {
   email: Record<string, boolean>;
   push: Record<string, boolean>;
   sms: Record<string, boolean>;
-  // Add other notification sections as needed
+  schedule: {
+    [key: string]: boolean | string;
+  };
+  types?: {
+    message: boolean;
+    session: boolean;
+    update: boolean;
+    daily_summary: boolean;
+  };
+  app?: boolean;
+  sound?: boolean;
 }
 
 const defaultPreferences: NotificationPreferences = {
@@ -30,7 +40,20 @@ const defaultPreferences: NotificationPreferences = {
     session: true,
     update: true,
     daily_summary: true
-  }
+  },
+  schedule: {
+    enabled: false,
+    start: '',
+    end: ''
+  },
+  types: {
+    message: true,
+    session: true,
+    update: true,
+    daily_summary: true
+  },
+  app: false,
+  sound: false
 };
 
 const NotificationSettings: React.FC = () => {
@@ -70,7 +93,18 @@ const NotificationSettings: React.FC = () => {
 
   const handleToggle = (section: keyof NotificationPreferences, subKey: string) => (value: boolean) => {
     setPreferences((prev) => {
-      const sectionPreferences = prev[section] || {};
+      const sectionPreferences = prev[section] as Record<string, boolean | string>;
+      
+      if (section === 'schedule') {
+        return {
+          ...prev,
+          schedule: {
+            ...prev.schedule,
+            [subKey]: value
+          }
+        };
+      }
+
       return {
         ...prev,
         [section]: {
@@ -146,22 +180,22 @@ const NotificationSettings: React.FC = () => {
         <div className="space-y-4">
           <SwitchItem
             label="In-App Notifications"
-            enabled={preferences.app}
+            enabled={preferences.app ?? false}
             onChange={(value) => handleToggle('app', 'value')}
           />
           <SwitchItem
             label="Email Notifications"
-            enabled={preferences.email}
-            onChange={(value) => handleToggle('email', 'value')}
+            enabled={preferences.email.message ?? false}
+            onChange={(value) => handleToggle('email', 'message')}
           />
           <SwitchItem
             label="SMS Notifications"
-            enabled={preferences.sms}
-            onChange={(value) => handleToggle('sms', 'value')}
+            enabled={preferences.sms.message ?? false}
+            onChange={(value) => handleToggle('sms', 'message')}
           />
           <SwitchItem
             label="Notification Sound"
-            enabled={preferences.sound}
+            enabled={preferences.sound ?? false}
             onChange={(value) => handleToggle('sound', 'value')}
           >
             {preferences.sound && (
@@ -182,23 +216,23 @@ const NotificationSettings: React.FC = () => {
         <div className="space-y-4">
           <SwitchItem
             label="Messages"
-            enabled={preferences.types.message}
-            onChange={(value) => handleToggle('types', 'message', value)}
+            enabled={preferences.types?.message ?? false}
+            onChange={(value) => handleToggle('types', 'message')}
           />
           <SwitchItem
             label="Appointments"
-            enabled={preferences.types.session}
-            onChange={(value) => handleToggle('types', 'session', value)}
+            enabled={preferences.types?.session ?? false}
+            onChange={(value) => handleToggle('types', 'session')}
           />
           <SwitchItem
             label="Updates"
-            enabled={preferences.types.update}
-            onChange={(value) => handleToggle('types', 'update', value)}
+            enabled={preferences.types?.update ?? false}
+            onChange={(value) => handleToggle('types', 'update')}
           />
           <SwitchItem
             label="Daily Summary"
-            enabled={preferences.types.daily_summary}
-            onChange={(value) => handleToggle('types', 'daily_summary', value)}
+            enabled={preferences.types?.daily_summary ?? false}
+            onChange={(value) => handleToggle('types', 'daily_summary')}
           />
         </div>
       </section>
@@ -209,8 +243,8 @@ const NotificationSettings: React.FC = () => {
         <div className="space-y-4">
           <SwitchItem
             label="Enable Quiet Hours"
-            enabled={preferences.schedule.enabled}
-            onChange={(value) => handleToggle('schedule', 'enabled', value)}
+            enabled={Boolean(preferences.schedule.enabled)}
+            onChange={(value) => handleToggle('schedule', 'enabled')}
           />
           {preferences.schedule.enabled && (
             <div className="ml-8 space-y-4">
@@ -218,7 +252,7 @@ const NotificationSettings: React.FC = () => {
                 <label className="text-sm">Start Time:</label>
                 <input
                   type="time"
-                  value={preferences.schedule.start}
+                  value={preferences.schedule.start as string}
                   onChange={(e) => handleTimeChange('start', e.target.value)}
                   className="border rounded px-2 py-1"
                 />
@@ -227,7 +261,7 @@ const NotificationSettings: React.FC = () => {
                 <label className="text-sm">End Time:</label>
                 <input
                   type="time"
-                  value={preferences.schedule.end}
+                  value={preferences.schedule.end as string}
                   onChange={(e) => handleTimeChange('end', e.target.value)}
                   className="border rounded px-2 py-1"
                 />

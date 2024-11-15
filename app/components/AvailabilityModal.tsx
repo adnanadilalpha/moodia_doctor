@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { FiClock, FiCalendar, FiGlobe } from 'react-icons/fi';
 import { VerificationSteps } from './shared/VerificationSteps';
 import { PricingModal } from './pricing/PricingModal';
+import { toast } from 'react-hot-toast';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -21,11 +22,13 @@ interface TimeSlot {
 interface AvailabilityModalProps {
   onClose: () => void;
   onSave: (availability: any) => Promise<void>;
+  onShowPricing?: () => void;
 }
 
 export const AvailabilityModal: React.FC<AvailabilityModalProps> = ({
   onClose,
   onSave,
+  onShowPricing
 }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [isLicenseVerified, setIsLicenseVerified] = useState<boolean>(false);
@@ -176,35 +179,42 @@ export const AvailabilityModal: React.FC<AvailabilityModalProps> = ({
   };
 
   const handleSaveAvailability = async () => {
-    if (!validateTimes()) return;
+    if (!validateTimes()) {
+      toast.error('Please fix the time errors before saving');
+      return;
+    }
 
     const user = auth.currentUser;
-    if (!user) return;
+    if (!user) {
+      toast.error('Please login to save settings');
+      return;
+    }
 
     try {
-      const doctorRef = doc(firestore, 'doctors', user.uid);
-
       const enabledAvailability = availability
         .filter((slot) => slot.enabled)
-        .map((slot) => ({
-          day: slot.day,
-          from: slot.from,
-          to: slot.to,
+        .map(({ day, from, to }) => ({
+          day,
+          from,
+          to
         }));
 
-      await setDoc(
-        doctorRef,
-        {
-          availability: enabledAvailability,
-          timezone,
-        },
-        { merge: true }
-      );
+      const doctorRef = doc(firestore, 'doctors', user.uid);
+      await setDoc(doctorRef, {
+        availability: enabledAvailability,
+        timezone
+      }, { merge: true });
 
-      onSave(enabledAvailability);
+      await onSave({
+        availability: enabledAvailability,
+        timezone
+      });
+
+      toast.success('Availability updated successfully');
       onClose();
     } catch (error) {
-      console.error('Error updating availability:', error);
+      console.error('Error saving availability:', error);
+      toast.error('Failed to save availability');
     }
   };
 
@@ -306,7 +316,7 @@ export const AvailabilityModal: React.FC<AvailabilityModalProps> = ({
                 Cancel
               </Button>
               <Button 
-                onClick={() => onSave(availability)}
+                onClick={handleSaveAvailability}
                 className="bg-blue-600 text-white hover:bg-blue-700"
               >
                 Save Availability
