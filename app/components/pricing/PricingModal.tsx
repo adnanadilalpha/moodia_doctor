@@ -142,14 +142,14 @@ export const PricingModal: React.FC<PricingModalProps> = ({
 
             {/* Billing Toggle */}
             <div className="flex justify-center mb-8">
-              <div className="bg-gray-100 p-1 rounded-xl">
+              <div className="bg-slate-400 border border-slate-200 p-1 rounded-xl">
                 <div className="flex space-x-1">
                   <button
                     onClick={() => setSelectedInterval('monthly')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                       selectedInterval === 'monthly'
-                        ? 'bg-white text-gray-900 shadow'
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-yellow-500 text-gray-900 shadow'
+                        : 'text-gray-50 hover:text-gray-200'
                     }`}
                   >
                     Monthly
@@ -158,12 +158,12 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                     onClick={() => setSelectedInterval('annually')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                       selectedInterval === 'annually'
-                        ? 'bg-white text-gray-900 shadow'
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-yellow-500 text-gray-900 shadow'
+                        : 'text-gray-50 hover:text-gray-200'
                     }`}
                   >
                     Annually
-                    <span className="ml-1 text-primary text-xs">Save 17%</span>
+                    <span className="ml-1 text-lime-200 text-xs">Save 17%</span>
                   </button>
                 </div>
               </div>

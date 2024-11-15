@@ -5,8 +5,8 @@ export const plans: Plan[] = [
     id: 'doctor-starter',
     name: 'Doctor Starter',
     price: {
-      monthly: 10,
-      annually: 100,
+      monthly: 15,
+      annually: 154.20,
     },
     features: [
       'Up to 50 appointments/month',
@@ -22,8 +22,8 @@ export const plans: Plan[] = [
     id: 'doctor-plus',
     name: 'Doctor Plus',
     price: {
-      monthly: 20,
-      annually: 200,
+      monthly: 25,
+      annually: 249.20,
     },
     features: [
       'Unlimited appointments',
