@@ -65,9 +65,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
       // Get the auth token
       const token = await user.getIdToken();
 
-      console.log('Making request to:', `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/stripe/create-checkout-session`);
-      
-      // Remove the /api prefix from the URL
+      // Create checkout session directly
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
@@ -83,9 +81,6 @@ export const PricingModal: React.FC<PricingModalProps> = ({
         })
       });
 
-      console.log('Response status:', response.status);
-      
-      // Handle non-JSON responses
       const responseText = await response.text();
       console.log('Raw response:', responseText);
 
@@ -101,7 +96,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
         throw new Error(responseData.message || 'Failed to create checkout session');
       }
 
-      const { url, sessionId } = responseData;
+      const { url } = responseData;
       
       if (!url) {
         throw new Error('No checkout URL received');
