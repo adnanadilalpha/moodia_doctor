@@ -187,7 +187,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                   >
                     {plan.id === 'doctor-plus' && (
                       <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                        <span className="bg-primary text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                        <span className="bg-primary text-black px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                           <FiStar className="w-4 h-4" />
                           Popular
                         </span>
